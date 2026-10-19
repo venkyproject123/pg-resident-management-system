@@ -1,2 +1,25 @@
-# pg-resident-management-system
-A web-based PG Resident Management System built with Java, Spring Boot, and MySQL, featuring owner authentication and CRUD operations to manage resident records.
+# PG Resident Management System
+
+## About the Project
+A web application that helps PG owners manage resident records.
+
+## Features
+- Owner Login
+- Add Resident
+- View Resident Details
+- Update Resident Details
+- Delete Resident Records
+
+## Technologies Used
+- Java 21
+- Spring Boot
+- Spring Data JPA
+- MySQL
+- Maven
+
+## Future Enhancements
+- QR Code-Based Registration
+- Resident Login
+
+## Project Status
+Under Development
