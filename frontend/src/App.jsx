@@ -1,0 +1,819 @@
+import { useEffect, useRef, useState } from "react";
+
+const RESIDENTS_API = "/api/residents";
+const emptyForm = {
+  name: "",
+  fatherName: "",
+  mobileNumber: "",
+  roomNumber: "",
+  rent: "",
+  advanceAmount: "",
+  joiningDate: "",
+  permanentAddress: "",
+  companyAddress: ""
+};
+
+function encodeBasicCredentials(credentials) {
+  const bytes = new TextEncoder().encode(`${credentials.username}:${credentials.password}`);
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function SecretInput(props) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="secret-input-wrap">
+      <input {...props} type={visible ? "text" : "password"} />
+      <button
+        type="button"
+        className="secret-visibility-toggle"
+        aria-label={visible ? "Hide value" : "Show value"}
+        aria-pressed={visible}
+        onClick={() => setVisible(!visible)}
+      >
+        {visible ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A11 11 0 0 1 12 5c5 0 8.5 4 9.5 7-.4 1.1-1.2 2.3-2.3 3.3M6.2 6.2C4.2 7.5 2.9 9.3 2.5 12c.6 1.8 3.8 7 9.5 7 1.1 0 2.1-.2 3-.5" /></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" /><circle cx="12" cy="12" r="2.5" /></svg>
+        )}
+      </button>
+    </span>
+  );
+}
+
+async function request(path, credentials, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      Authorization: `Basic ${encodeBasicCredentials(credentials)}`,
+    ...(options.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
+      ...options.headers
+    }
+  });
+
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.json();
+      detail = body.detail || body.message || body.error || "";
+    } catch {
+      detail = "";
+    }
+    if (response.status === 401) {
+      throw new Error("Login failed. Check the owner username and password.");
+    }
+    if (response.status === 404) {
+      throw new Error("That resident could not be found.");
+    }
+    throw new Error(detail || `Request failed (${response.status}). Check the submitted values and try again.`);
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+async function publicRequest(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const result = await response.json();
+      detail = result.detail || result.message || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || `Request failed (${response.status}).`);
+  }
+  return response.status === 204 || response.status === 202 || response.status === 201
+    ? null
+    : response.json();
+}
+
+function residentToForm(resident) {
+  return {
+    name: resident.name,
+    fatherName: resident.fatherName,
+    mobileNumber: resident.mobileNumber,
+    roomNumber: resident.roomNumber,
+    rent: String(resident.rent),
+    advanceAmount: String(resident.advanceAmount),
+    joiningDate: resident.joiningDate,
+    permanentAddress: resident.permanentAddress,
+    companyAddress: resident.companyAddress
+  };
+}
+
+function App() {
+  const [credentials, setCredentials] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [authMode, setAuthMode] = useState("LOGIN");
+  const [setupForm, setSetupForm] = useState({ setupToken: "", username: "", password: "" });
+  const [recoveryForm, setRecoveryForm] = useState({ recoveryToken: "", username: "", newPassword: "" });
+  const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
+  const [passwordChange, setPasswordChange] = useState({ currentPassword: "", newPassword: "" });
+  const [residents, setResidents] = useState([]);
+  const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
+  const [searchText, setSearchText] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [identityProofFile, setIdentityProofFile] = useState(null);
+  const [documentPreview, setDocumentPreview] = useState(null);
+  const [viewerResident, setViewerResident] = useState(null);
+  const photoInput = useRef(null);
+  const identityProofInput = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (documentPreview?.url) URL.revokeObjectURL(documentPreview.url);
+    };
+  }, [documentPreview]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/owner/setup-status")
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Could not check owner setup status (${response.status}).`);
+        return response.json();
+      })
+      .then((result) => {
+        if (!mounted) return;
+        if (result.setupRequired) setAuthMode("SETUP");
+      })
+      .catch((requestError) => {
+        if (mounted) setError(requestError.message);
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  async function loadResidents(owner, keyword = "", status = "ALL") {
+    const query = keyword.trim();
+    const path = query
+      ? `${RESIDENTS_API}/search?keyword=${encodeURIComponent(query)}${status === "ALL" ? "" : `&status=${status}`}`
+      : status === "ACTIVE"
+        ? `${RESIDENTS_API}/get`
+        : status === "VACATED"
+        ? `${RESIDENTS_API}/status/VACATED`
+          : `${RESIDENTS_API}/all`;
+    const [allResidents, data] = await Promise.all([
+      request(`${RESIDENTS_API}/all`, owner),
+      request(path, owner)
+    ]);
+    setResidents(data);
+    setResidentTotals({
+      active: allResidents.filter((resident) => resident.status === "ACTIVE").length,
+      vacated: allResidents.filter((resident) => resident.status === "VACATED").length
+    });
+    return data;
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await loadResidents(loginForm);
+      setCredentials(loginForm);
+      setNotice("");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSetupOwner(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await publicRequest("/api/owner/setup", setupForm);
+      const ownerCredentials = { username: setupForm.username, password: setupForm.password };
+      await loadResidents(ownerCredentials);
+      setCredentials(ownerCredentials);
+      setLoginForm(ownerCredentials);
+      setSetupForm({ setupToken: "", username: "", password: "" });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleConfirmPasswordReset(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await publicRequest("/api/owner/password-reset", recoveryForm);
+      setAuthMode("LOGIN");
+      setLoginForm({ username: recoveryForm.username, password: "" });
+      setRecoveryForm({ recoveryToken: "", username: "", newPassword: "" });
+      setNotice("Password changed. Sign in with your new password.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleChangePassword(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await request("/api/owner/password/change", credentials, {
+        method: "POST",
+        body: JSON.stringify(passwordChange)
+      });
+      const updatedCredentials = { ...credentials, password: passwordChange.newPassword };
+      setCredentials(updatedCredentials);
+      setLoginForm(updatedCredentials);
+      setPasswordChange({ currentPassword: "", newPassword: "" });
+      setPasswordChangeOpen(false);
+      setNotice("Password changed successfully.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function logout() {
+    setCredentials(null);
+    setLoginForm({ username: "", password: "" });
+    setResidents([]);
+    setResidentTotals({ active: 0, vacated: 0 });
+    setSearchText("");
+    setSelectedStatus("ALL");
+    setForm(emptyForm);
+    setEditingId(null);
+    setFormOpen(false);
+    setError("");
+    setNotice("");
+    setDocumentResident(null);
+    setDocumentPreview(null);
+  }
+
+  async function handleSearch(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await loadResidents(credentials, searchText, selectedStatus);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function showResidentsByStatus(status) {
+    setSelectedStatus(status);
+    setSearchText("");
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await loadResidents(credentials, "", status);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function startCreate() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setPhotoFile(null);
+    setIdentityProofFile(null);
+    setDocumentPreview(null);
+    setError("");
+    setNotice("");
+    setFormOpen(true);
+  }
+
+  function startEdit(resident) {
+    setEditingId(resident.id);
+    setForm(residentToForm(resident));
+    setPhotoFile(null);
+    setIdentityProofFile(null);
+    setDocumentPreview(null);
+    setError("");
+    setNotice("");
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setForm(emptyForm);
+    setEditingId(null);
+    setPhotoFile(null);
+    setIdentityProofFile(null);
+    setDocumentPreview(null);
+    setError("");
+  }
+
+  async function handleSave(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    const payload = {
+      ...form,
+      rent: Number(form.rent),
+      advanceAmount: Number(form.advanceAmount)
+    };
+    let residentId = editingId;
+    const creatingResident = editingId === null;
+    const uploadingFiles = Boolean(photoFile || identityProofFile);
+    let residentDetailsSaved = false;
+    try {
+      if (residentId === null) {
+        const createdResident = await request(`${RESIDENTS_API}/post`, credentials, {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        residentId = createdResident.id;
+        setEditingId(residentId);
+      } else {
+        await request(`${RESIDENTS_API}/${residentId}`, credentials, {
+          method: "PUT",
+          body: JSON.stringify(payload)
+        });
+      }
+      residentDetailsSaved = true;
+
+      for (const [type, file] of [["photo", photoFile], ["identity-proof", identityProofFile]]) {
+        if (!file) continue;
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error("Choose files smaller than 5 MB.");
+        }
+        const body = new FormData();
+        body.append("file", file);
+        await request(`${RESIDENTS_API}/${residentId}/${type}`, credentials, {
+          method: "POST",
+          body
+        });
+        if (type === "photo") {
+          setPhotoFile(null);
+          if (photoInput.current) photoInput.current.value = "";
+        } else {
+          setIdentityProofFile(null);
+          if (identityProofInput.current) identityProofInput.current.value = "";
+        }
+      }
+
+      await loadResidents(credentials, searchText, selectedStatus);
+      setNotice(
+        creatingResident
+          ? uploadingFiles
+            ? "Resident details and selected files submitted successfully."
+            : "Resident details submitted successfully."
+          : uploadingFiles
+            ? "Resident details updated and selected files uploaded successfully."
+            : "Resident details updated successfully."
+      );
+      setFormOpen(false);
+      setForm(emptyForm);
+      setEditingId(null);
+      setPhotoFile(null);
+      setIdentityProofFile(null);
+      setDocumentPreview(null);
+    } catch (requestError) {
+      if (residentDetailsSaved) {
+        try {
+          await loadResidents(credentials, searchText, selectedStatus);
+        } catch {
+          setError(`Resident details were saved, but a follow-up request failed: ${requestError.message}`);
+          setLoading(false);
+          return;
+        }
+        setError(`Resident details were saved, but a file or follow-up request failed: ${requestError.message}`);
+      } else {
+        setError(requestError.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function markVacated(resident) {
+    if (!window.confirm(`Mark ${resident.name} in room ${resident.roomNumber} as vacated? Their record will be retained.`)) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await request(`${RESIDENTS_API}/${resident.id}`, credentials, { method: "DELETE" });
+      setNotice("Resident marked as vacated successfully. Their history has been preserved.");
+      await loadResidents(credentials, searchText, selectedStatus);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function permanentlyDeleteResident(resident) {
+    if (!window.confirm(`Permanently delete ${resident.name} in room ${resident.roomNumber}? This also removes their documents and cannot be undone.`)) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await request(`${RESIDENTS_API}/${resident.id}/permanent`, credentials, { method: "DELETE" });
+      setNotice("Resident and their documents permanently deleted.");
+      await loadResidents(credentials, searchText, selectedStatus);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function viewDocument(resident, documentType) {
+    setLoading(true);
+    setError("");
+    if (formOpen) setDocumentPreview(null);
+    const documentName = documentType === "photo" ? "Resident photo" : "Identity proof";
+    try {
+      const response = await fetch(
+        `${RESIDENTS_API}/${resident.id}/${documentType === "photo" ? "photo" : "identity-proof"}`,
+        { headers: { Authorization: `Basic ${encodeBasicCredentials(credentials)}` } }
+      );
+      if (!response.ok) {
+        if (response.status === 401) throw new Error("Your sign-in is no longer valid. Sign out and sign in again.");
+        if (response.status === 404) throw new Error("This resident does not have that file uploaded yet.");
+        throw new Error(`Could not open document (${response.status}).`);
+      }
+      const blob = await response.blob();
+      const preview = { url: URL.createObjectURL(blob), contentType: blob.type, title: documentName };
+      if (formOpen) {
+        setDocumentPreview(preview);
+      } else {
+        setViewerResident(resident);
+        setDocumentPreview(preview);
+      }
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateForm(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  if (!credentials) {
+    return (
+      <main className="login-shell">
+        <section className="login-card">
+          <a className="brand" href="/" aria-label="Haven home">
+            <span className="brand-mark">H</span>
+            <span>haven<span className="brand-period">.</span></span>
+          </a>
+          <p className="eyebrow">OWNER PORTAL</p>
+          <h1>{authMode === "SETUP" ? "Create your owner account." : authMode === "FORGOT" ? "Recover your account." : "Welcome back."}</h1>
+          <p className="muted">{authMode === "SETUP" ? "Each PG owner gets a separate login and private resident directory." : authMode === "FORGOT" ? "Use your private recovery token to reset your password." : "Sign in to securely manage your residents."}</p>
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
+          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {authMode === "LOGIN" && <form className="stack-form" onSubmit={handleLogin}>
+            <label>
+              Username
+              <input
+                autoComplete="username"
+                required
+                value={loginForm.username}
+                onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })}
+              />
+            </label>
+            <label>
+              Password
+              <SecretInput
+                autoComplete="current-password"
+                required
+                value={loginForm.password}
+                onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
+              />
+            </label>
+            <button className="button button-primary button-wide" disabled={loading}>
+              {loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form>}
+          {authMode === "SETUP" && <form className="stack-form" onSubmit={handleSetupOwner}>
+            <label>Owner setup or registration token<SecretInput required value={setupForm.setupToken} onChange={(event) => setSetupForm({ ...setupForm, setupToken: event.target.value })} /></label>
+            <label>Username<input autoComplete="username" minLength="3" maxLength="50" required value={setupForm.username} onChange={(event) => setSetupForm({ ...setupForm, username: event.target.value })} /></label>
+            <label>Password (at least 12 characters)<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={setupForm.password} onChange={(event) => setSetupForm({ ...setupForm, password: event.target.value })} /></label>
+            <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
+          </form>}
+          {authMode === "FORGOT" && <form className="stack-form" onSubmit={handleConfirmPasswordReset}>
+            <label>Owner recovery token<SecretInput required value={recoveryForm.recoveryToken} onChange={(event) => setRecoveryForm({ ...recoveryForm, recoveryToken: event.target.value })} /></label>
+            <label>Username<input autoComplete="username" required value={recoveryForm.username} onChange={(event) => setRecoveryForm({ ...recoveryForm, username: event.target.value })} /></label>
+            <label>New password (at least 12 characters)<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={recoveryForm.newPassword} onChange={(event) => setRecoveryForm({ ...recoveryForm, newPassword: event.target.value })} /></label>
+            <button className="button button-primary button-wide" disabled={loading}>Reset password</button>
+          </form>}
+          {authMode === "LOGIN" && <>
+            <button type="button" className="text-action" onClick={() => { setAuthMode("SETUP"); setError(""); setNotice(""); }}>Create owner account</button>
+            <button type="button" className="text-action" onClick={() => { setAuthMode("FORGOT"); setError(""); setNotice(""); }}>Forgot password?</button>
+            <p className="login-footnote">Your password is stored as a one-way hash. Keep your recovery token in a secure password manager.</p>
+          </>}
+          {authMode !== "LOGIN" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
+        </section>
+        <aside className="login-aside">
+          <div className="aside-orb orb-one" />
+          <div className="aside-orb orb-two" />
+          <div className="aside-content">
+            <span className="aside-kicker">A calmer way to manage your PG</span>
+            <h2>Your residents.<br />All in one place.</h2>
+            <p>Keep everyday records clear, organised, and in your hands.</p>
+            <div className="aside-note"><span className="lock-icon">↗</span> Private owner access</div>
+          </div>
+          <span className="aside-caption">RESIDENT MANAGEMENT · MADE SIMPLE</span>
+        </aside>
+      </main>
+    );
+  }
+
+  const editingResident = residents.find((resident) => resident.id === editingId) || null;
+  const totalMembers = residentTotals.active + residentTotals.vacated;
+
+  return (
+    <main className="dashboard">
+      <header className="topbar">
+        <a className="brand" href="/" aria-label="Haven home">
+          <span className="brand-mark">H</span>
+          <span>haven<span className="brand-period">.</span></span>
+        </a>
+        <div className="topbar-right">
+          <span className="owner-label"><span className="online-dot" /> Owner dashboard</span>
+          <button className="button button-light" onClick={() => setPasswordChangeOpen(true)}>Change password</button>
+          <button className="button button-light" onClick={logout}>Sign out</button>
+        </div>
+      </header>
+
+      <div className="page-content">
+        <section className="page-heading">
+          <div>
+            <p className="eyebrow">YOUR PROPERTY</p>
+            <h1>Resident overview</h1>
+            <p className="muted">A clear view of the people who call your PG home.</p>
+          </div>
+          <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
+        </section>
+
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {notice && <div className="alert alert-success" role="status">{notice}</div>}
+
+        <section className="stats-grid" aria-label="Resident totals">
+          <button className={`stat-card stat-card-button${selectedStatus === "ALL" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ALL"} onClick={() => showResidentsByStatus("ALL")} disabled={loading}>
+            <span className="stat-icon icon-total">⌂</span>
+            <div><p className="stat-label">Total members in PG</p><strong>{totalMembers}</strong></div>
+          </button>
+          <button className={`stat-card stat-card-button${selectedStatus === "ACTIVE" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ACTIVE"} onClick={() => showResidentsByStatus("ACTIVE")} disabled={loading}>
+            <span className="stat-icon icon-active">✓</span>
+            <div><p className="stat-label">Total active members</p><strong>{residentTotals.active}</strong></div>
+          </button>
+          <button className={`stat-card stat-card-button${selectedStatus === "VACATED" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "VACATED"} onClick={() => showResidentsByStatus("VACATED")} disabled={loading}>
+            <span className="stat-icon icon-vacated">↗</span>
+            <div><p className="stat-label">Total vacated members</p><strong>{residentTotals.vacated}</strong></div>
+          </button>
+        </section>
+
+        <section className="workspace">
+          <article className="panel resident-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">DIRECTORY</p>
+                <h2>{searchText.trim() ? "Search results" : selectedStatus === "ALL" ? "All members" : selectedStatus === "ACTIVE" ? "Active members" : "Vacated members"} <span className="count-pill">{residents.length}</span></h2>
+              </div>
+              <div className="directory-actions">
+                <form className="search-form" onSubmit={handleSearch}>
+                  <span aria-hidden="true" className="search-icon">⌕</span>
+                  <input
+                    aria-label="Search residents"
+                    placeholder="Search by name or room number"
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                  />
+                  {searchText && <button type="button" className="clear-search" onClick={() => setSearchText("")} aria-label="Clear search">×</button>}
+                  <button type="submit" className="button button-search" disabled={loading}>Search</button>
+                </form>
+              </div>
+            </div>
+
+            {passwordChangeOpen && <div className="dialog-backdrop">
+              <section className="resident-dialog panel document-viewer" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
+                <div className="panel-heading">
+                  <div><p className="eyebrow">ACCOUNT SECURITY</p><h2 id="change-password-title">Change password</h2></div>
+                  <button className="icon-button" onClick={() => setPasswordChangeOpen(false)} aria-label="Close password form">×</button>
+                </div>
+                {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
+                <form className="stack-form password-change-form" onSubmit={handleChangePassword}>
+                  <label>Current password<SecretInput autoComplete="current-password" required value={passwordChange.currentPassword} onChange={(event) => setPasswordChange({ ...passwordChange, currentPassword: event.target.value })} /></label>
+                  <label>New password (at least 12 characters)<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={passwordChange.newPassword} onChange={(event) => setPasswordChange({ ...passwordChange, newPassword: event.target.value })} /></label>
+                  <div className="form-footer-actions">
+                    <button type="button" className="button button-light" onClick={() => setPasswordChangeOpen(false)}>Cancel</button>
+                    <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Updating…" : "Update password"}</button>
+                  </div>
+                </form>
+              </section>
+            </div>}
+
+            {residents.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-illustration">⌂</div>
+                <h3>{searchText.trim() ? "No matching residents" : "Your directory is ready"}</h3>
+                <p>{searchText.trim() ? "Try another name or room number." : "Add your first resident to start building your directory."}</p>
+                {!searchText.trim() && <button className="button button-primary" onClick={startCreate}>＋ Add a resident</button>}
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>RESIDENT</th><th>MOBILE</th><th>ROOM</th><th>RENT / MONTH</th><th>JOINED</th><th>STATUS</th><th>VACATED DATE</th><th>RESIDENT DETAILS</th><th><span className="sr-only">Actions</span></th></tr>
+                  </thead>
+                  <tbody>
+                    {residents.map((resident) => (
+                      <tr key={resident.id}>
+                        <td>
+                          <div className="resident-cell">
+                            <span className="avatar">{resident.name.trim().charAt(0).toUpperCase()}</span>
+                            <span><strong>{resident.name}</strong><small>Father: {resident.fatherName}</small></span>
+                          </div>
+                        </td>
+                        <td>{resident.mobileNumber || "—"}</td>
+                        <td><span className="room-tag">{resident.roomNumber}</span></td>
+                        <td className="rent-cell">₹{Number(resident.rent).toLocaleString("en-IN")}</td>
+                        <td>{resident.joiningDate}</td>
+                        <td><span className={`status-badge ${resident.status === "ACTIVE" ? "status-active" : "status-vacated"}`}><span />{resident.status === "ACTIVE" ? "Active" : "Vacated"}</span></td>
+                        <td>{resident.vacatedDate || "—"}</td>
+                        <td className="details-cell">
+                          <div><span>Father</span><strong>{resident.fatherName}</strong></div>
+                          <div><span>Advance</span><strong>₹{Number(resident.advanceAmount).toLocaleString("en-IN")}</strong></div>
+                          <div><span>Permanent</span><strong>{resident.permanentAddress}</strong></div>
+                          <div><span>Company</span><strong>{resident.companyAddress}</strong></div>
+                          <div className="details-documents">
+                            {resident.hasPhoto
+                              ? <button className="text-action" onClick={() => viewDocument(resident, "photo")}>View photo</button>
+                              : <span className="missing-document">No photo</span>}
+                            {resident.hasIdentityProof
+                              ? <button className="text-action" onClick={() => viewDocument(resident, "identity-proof")}>View proof</button>
+                              : <span className="missing-document">No proof</span>}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            <button className="text-action" onClick={() => startEdit(resident)}>Edit</button>
+                            {resident.status === "ACTIVE" && <button className="text-action text-danger" onClick={() => markVacated(resident)}>Vacate</button>}
+                            <button className="text-action text-danger" onClick={() => permanentlyDeleteResident(resident)} disabled={loading}>Delete permanently</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </article>
+
+        </section>
+
+        {formOpen && (
+          <div className="dialog-backdrop">
+            <section className="resident-dialog panel" role="dialog" aria-modal="true" aria-labelledby="resident-form-title">
+              <div className="panel-heading resident-dialog-heading">
+                <div>
+                  <p className="eyebrow">{editingId === null ? "NEW RECORD" : `EDITING RESIDENT #${editingId}`}</p>
+                  <h2 id="resident-form-title">{editingId === null ? "Add a resident" : "Edit resident details"}</h2>
+                  <p className="muted">Enter resident details and attach their photo and identity proof.</p>
+                </div>
+                <button className="icon-button" onClick={closeForm} disabled={loading} aria-label="Close resident form">×</button>
+              </div>
+              {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
+              <form className="resident-form" onSubmit={handleSave}>
+                <div className="resident-fields">
+                  <div className="form-row">
+                    <label>Full name<input name="name" maxLength="100" required value={form.name} onChange={updateForm} /></label>
+                    <label>Father’s name<input name="fatherName" maxLength="100" required value={form.fatherName} onChange={updateForm} /></label>
+                  </div>
+                  <div className="form-row">
+                    <label>Mobile number<input type="tel" name="mobileNumber" maxLength="20" required value={form.mobileNumber} onChange={updateForm} /></label>
+                    <label>Room number<input name="roomNumber" maxLength="30" required value={form.roomNumber} onChange={updateForm} /></label>
+                  </div>
+                  <label>Joining date<input type="date" name="joiningDate" required value={form.joiningDate} onChange={updateForm} /></label>
+                  <div className="form-row">
+                    <label>Monthly rent (₹)<input type="number" name="rent" min="0.01" step="0.01" required value={form.rent} onChange={updateForm} /></label>
+                    <label>Advance (₹)<input type="number" name="advanceAmount" min="0" step="0.01" required value={form.advanceAmount} onChange={updateForm} /></label>
+                  </div>
+                  <label>Permanent address<textarea name="permanentAddress" rows="2" maxLength="1000" required value={form.permanentAddress} onChange={updateForm} /></label>
+                  <label>Company address<textarea name="companyAddress" rows="2" maxLength="1000" required value={form.companyAddress} onChange={updateForm} /></label>
+                </div>
+
+                <section className="attachments-section" aria-labelledby="attachments-heading">
+                  <div className="attachments-heading">
+                    <div>
+                      <p className="eyebrow">DOCUMENTS</p>
+                      <h3 id="attachments-heading">Photo & identity proof</h3>
+                    </div>
+                    <span className="private-chip"><span>◆</span> Private</span>
+                  </div>
+                  <p className="attachments-help">Add files now or when editing this resident. JPEG/PNG photos and JPEG/PNG/PDF proofs, up to 5 MB each.</p>
+                  <div className="attachment-grid">
+                    <div className="attachment-card">
+                      <span className="attachment-icon">▧</span>
+                      <span className="attachment-title">Resident photo</span>
+                      <span className="attachment-subtitle">{photoFile?.name || (editingResident?.hasPhoto ? "Photo already saved" : "No photo selected")}</span>
+                      <label className="file-picker">
+                        <span>{photoFile ? "Choose a different photo" : "Choose photo"}</span>
+                        <input ref={photoInput} type="file" accept="image/jpeg,image/png" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} />
+                      </label>
+                      {editingResident?.hasPhoto && editingId !== null && (
+                        <button type="button" className="text-action attachment-view" onClick={() => viewDocument(editingResident, "photo")}>View saved photo</button>
+                      )}
+                    </div>
+                    <div className="attachment-card">
+                      <span className="attachment-icon proof-icon">▤</span>
+                      <span className="attachment-title">Identity proof</span>
+                      <span className="attachment-subtitle">{identityProofFile?.name || (editingResident?.hasIdentityProof ? "Proof already saved" : "No proof selected")}</span>
+                      <label className="file-picker">
+                        <span>{identityProofFile ? "Choose a different file" : "Choose proof"}</span>
+                        <input ref={identityProofInput} type="file" accept="image/jpeg,image/png,application/pdf" onChange={(event) => setIdentityProofFile(event.target.files?.[0] || null)} />
+                      </label>
+                      {editingResident?.hasIdentityProof && editingId !== null && (
+                        <button type="button" className="text-action attachment-view" onClick={() => viewDocument(editingResident, "identity-proof")}>View saved proof</button>
+                      )}
+                    </div>
+                  </div>
+                  {documentPreview && (
+                    <div className="document-preview">
+                      <div className="preview-title">{documentPreview.title}</div>
+                      {documentPreview.contentType.startsWith("image/") ? (
+                        <img src={documentPreview.url} alt={documentPreview.title} />
+                      ) : (
+                        <iframe title={documentPreview.title} src={documentPreview.url} />
+                      )}
+                    </div>
+                  )}
+                </section>
+                <div className="resident-form-footer">
+                  <p className="form-privacy"><span>◆</span> Only the signed-in owner can view saved files.</p>
+                  <div className="form-footer-actions">
+                    <button type="button" className="button button-light" onClick={closeForm} disabled={loading}>Cancel</button>
+                    <button type="submit" className="button button-primary" disabled={loading}>
+                      {loading ? "Saving resident…" : editingId === null ? "Save resident" : "Save changes"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
+
+        {viewerResident && documentPreview && (
+          <div className="dialog-backdrop" onClick={() => { setViewerResident(null); setDocumentPreview(null); }}>
+            <section className="document-viewer panel" role="dialog" aria-modal="true" aria-labelledby="document-viewer-title" onClick={(event) => event.stopPropagation()}>
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">PRIVATE RESIDENT FILE</p>
+                  <h2 id="document-viewer-title">{viewerResident.name} · {documentPreview.title}</h2>
+                  <p className="muted">Room {viewerResident.roomNumber}. Visible to the signed-in owner only.</p>
+                </div>
+                <button className="icon-button" onClick={() => { setViewerResident(null); setDocumentPreview(null); }} aria-label="Close file">×</button>
+              </div>
+              <div className="document-preview">
+                {documentPreview.contentType.startsWith("image/") ? (
+                  <img src={documentPreview.url} alt={documentPreview.title} />
+                ) : (
+                  <iframe title={documentPreview.title} src={documentPreview.url} />
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
+        <footer className="page-footer"><span>haven<span className="brand-period">.</span></span> Resident management, made simpler.</footer>
+      </div>
+    </main>
+  );
+}
+
+export default App;
