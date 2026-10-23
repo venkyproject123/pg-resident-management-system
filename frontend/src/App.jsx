@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+const apiUrl = (path) => `${API_BASE_URL}${path}`;
 const RESIDENTS_API = "/api/residents";
 const emptyForm = {
   name: "",
@@ -43,7 +45,7 @@ function SecretInput(props) {
 }
 
 async function request(path, credentials, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: {
       Authorization: `Basic ${encodeBasicCredentials(credentials)}`,
@@ -74,7 +76,7 @@ async function request(path, credentials, options = {}) {
 }
 
 async function publicRequest(path, body) {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
@@ -151,7 +153,7 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    fetch("/api/owner/setup-status")
+    fetch(apiUrl("/api/owner/setup-status"))
       .then(async (response) => {
         if (!response.ok) throw new Error(`Could not check owner setup status (${response.status}).`);
         return response.json();
@@ -591,7 +593,7 @@ function App() {
     const documentName = documentType === "photo" ? "Resident photo" : "Identity proof";
     try {
       const response = await fetch(
-        `${RESIDENTS_API}/${resident.id}/${documentType === "photo" ? "photo" : "identity-proof"}`,
+        apiUrl(`${RESIDENTS_API}/${resident.id}/${documentType === "photo" ? "photo" : "identity-proof"}`),
         { headers: { Authorization: `Basic ${encodeBasicCredentials(credentials)}` } }
       );
       if (!response.ok) {
