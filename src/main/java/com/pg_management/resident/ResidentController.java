@@ -24,6 +24,8 @@ import org.springframework.web.multipart.MultipartFile;
 import com.pg_management.resident.dto.CreateResidentRequest;
 import com.pg_management.resident.dto.ResidentResponse;
 import com.pg_management.resident.dto.UpdateResidentRequest;
+import com.pg_management.resident.dto.RentPaymentRequest;
+import com.pg_management.resident.dto.RentPaymentResponse;
 import com.pg_management.resident.storage.ResidentDocument;
 import com.pg_management.security.OwnerAccount;
 import com.pg_management.security.OwnerAccountRepository;
@@ -38,10 +40,15 @@ import org.springframework.web.server.ResponseStatusException;
 public class ResidentController {
 
 	private final ResidentService residentService;
+	private final RentPaymentService rentPaymentService;
 	private final OwnerAccountRepository ownerAccountRepository;
 
-	public ResidentController(ResidentService residentService, OwnerAccountRepository ownerAccountRepository) {
+	public ResidentController(
+			ResidentService residentService,
+			RentPaymentService rentPaymentService,
+			OwnerAccountRepository ownerAccountRepository) {
 		this.residentService = residentService;
+		this.rentPaymentService = rentPaymentService;
 		this.ownerAccountRepository = ownerAccountRepository;
 	}
 
@@ -123,6 +130,24 @@ public class ResidentController {
 	@GetMapping("/{id}/identity-proof")
 	public ResponseEntity<byte[]> getIdentityProof(Authentication authentication, @PathVariable Long id) {
 		return documentResponse(residentService.getIdentityProof(owner(authentication), id));
+	}
+
+	@GetMapping("/{id}/rent-payments")
+	public List<RentPaymentResponse> rentPayments(
+			Authentication authentication,
+			@PathVariable Long id,
+			@RequestParam @jakarta.validation.constraints.Min(2000) @jakarta.validation.constraints.Max(2200) int year) {
+		return rentPaymentService.findYear(owner(authentication), id, year);
+	}
+
+	@PutMapping("/{id}/rent-payments/{year}/{month}")
+	public RentPaymentResponse markRentPaid(
+			Authentication authentication,
+			@PathVariable Long id,
+			@PathVariable @jakarta.validation.constraints.Min(2000) @jakarta.validation.constraints.Max(2200) int year,
+			@PathVariable @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(12) int month,
+			@Valid @RequestBody RentPaymentRequest request) {
+		return rentPaymentService.recordPaid(owner(authentication), id, year, month, request);
 	}
 
 	private OwnerAccount owner(Authentication authentication) {

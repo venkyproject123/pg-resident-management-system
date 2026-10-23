@@ -42,6 +42,17 @@ public class OwnerTenantSchemaMigration implements ApplicationRunner {
 					SET resident.owner_id = first_owner.id
 					""");
 		}
+		if (hasColumn("owner_accounts", "pg_name")) {
+			jdbcTemplate.update("UPDATE owner_accounts SET pg_name = 'PG' WHERE pg_name IS NULL OR pg_name = ''");
+		}
+		if (hasColumn("owner_accounts", "mobile_number") && hasColumn("owner_accounts", "whatsapp_number")) {
+			jdbcTemplate.update("""
+					UPDATE owner_accounts
+					SET whatsapp_number = mobile_number
+					WHERE (whatsapp_number IS NULL OR whatsapp_number = '')
+					  AND mobile_number REGEXP '^\\\\+[1-9][0-9]{7,14}$'
+					""");
+		}
 	}
 
 	private boolean hasColumn(String table, String column) {

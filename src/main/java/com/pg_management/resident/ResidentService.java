@@ -29,10 +29,15 @@ public class ResidentService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ResidentService.class);
 
 	private final ResidentRepository residentRepository;
+	private final RentPaymentRepository rentPaymentRepository;
 	private final PrivateDocumentStorageService documentStorage;
 
-	public ResidentService(ResidentRepository residentRepository, PrivateDocumentStorageService documentStorage) {
+	public ResidentService(
+			ResidentRepository residentRepository,
+			RentPaymentRepository rentPaymentRepository,
+			PrivateDocumentStorageService documentStorage) {
 		this.residentRepository = residentRepository;
+		this.rentPaymentRepository = rentPaymentRepository;
 		this.documentStorage = documentStorage;
 	}
 
@@ -126,6 +131,7 @@ public class ResidentService {
 
 	public void permanentlyDelete(OwnerAccount owner, Long id) {
 		Resident resident = getResident(owner, id);
+		rentPaymentRepository.deleteAllByResident(resident);
 		residentRepository.delete(resident);
 		registerPermanentDeletionCleanup(resident.getPhotoStorageKey(), resident.getIdentityProofStorageKey());
 	}

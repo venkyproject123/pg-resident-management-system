@@ -59,6 +59,9 @@ class ResidentControllerTests {
 	private ResidentService residentService;
 
 	@MockitoBean
+	private RentPaymentService rentPaymentService;
+
+	@MockitoBean
 	private OwnerUserDetailsService ownerUserDetailsService;
 
 	@MockitoBean

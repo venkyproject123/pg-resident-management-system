@@ -30,6 +30,7 @@ public class SecurityConfig {
 							"/api/owner/setup-status",
 							"/api/owner/setup",
 							"/api/owner/setup/**",
+							"/api/owner/registration-otp",
 							"/api/owner/password-reset",
 							"/api/owner/password-reset/**").permitAll()
 					.anyRequest().authenticated())

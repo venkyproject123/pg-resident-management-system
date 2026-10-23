@@ -108,14 +108,20 @@ function residentToForm(resident) {
   };
 }
 
+function phoneForForm(number = "") {
+  return number.startsWith("+91") ? number.slice(3) : number;
+}
+
 function App() {
   const [credentials, setCredentials] = useState(null);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [authMode, setAuthMode] = useState("LOGIN");
-  const [setupForm, setSetupForm] = useState({ setupToken: "", username: "", password: "" });
-  const [recoveryForm, setRecoveryForm] = useState({ recoveryToken: "", username: "", newPassword: "" });
+  const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", whatsappNumber: "", otp: "" });
+  const [recoveryForm, setRecoveryForm] = useState({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
   const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
   const [passwordChange, setPasswordChange] = useState({ currentPassword: "", newPassword: "" });
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ pgName: "", whatsappNumber: "", otp: "" });
   const [residents, setResidents] = useState([]);
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
@@ -130,6 +136,10 @@ function App() {
   const [identityProofFile, setIdentityProofFile] = useState(null);
   const [documentPreview, setDocumentPreview] = useState(null);
   const [viewerResident, setViewerResident] = useState(null);
+  const [rentPaymentResident, setRentPaymentResident] = useState(null);
+  const [rentPaymentYear, setRentPaymentYear] = useState(new Date().getFullYear());
+  const [rentPayments, setRentPayments] = useState([]);
+  const [paymentDraft, setPaymentDraft] = useState(null);
   const photoInput = useRef(null);
   const identityProofInput = useRef(null);
 
@@ -183,8 +193,24 @@ function App() {
     setError("");
     try {
       await loadResidents(loginForm);
+      const profile = await request("/api/owner/profile", loginForm);
+      setProfileForm({ ...profile, whatsappNumber: phoneForForm(profile.whatsappNumber || ""), otp: "" });
       setCredentials(loginForm);
       setNotice("");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRequestRegistrationOtp() {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await publicRequest("/api/owner/registration-otp", {});
+      setNotice("OTP sent to the administrator's WhatsApp number. It expires in 5 minutes.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -201,9 +227,28 @@ function App() {
       await publicRequest("/api/owner/setup", setupForm);
       const ownerCredentials = { username: setupForm.username, password: setupForm.password };
       await loadResidents(ownerCredentials);
+      const profile = await request("/api/owner/profile", ownerCredentials);
+      setProfileForm({ ...profile, whatsappNumber: phoneForForm(profile.whatsappNumber || ""), otp: "" });
       setCredentials(ownerCredentials);
       setLoginForm(ownerCredentials);
-      setSetupForm({ setupToken: "", username: "", password: "" });
+      setSetupForm({ username: "", password: "", pgName: "", whatsappNumber: "", otp: "" });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRequestResetOtp() {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await publicRequest("/api/owner/password-reset/otp", {
+        username: recoveryForm.username,
+        whatsappNumber: recoveryForm.whatsappNumber
+      });
+      setNotice("If the username and WhatsApp number match, an OTP has been sent.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -219,7 +264,7 @@ function App() {
       await publicRequest("/api/owner/password-reset", recoveryForm);
       setAuthMode("LOGIN");
       setLoginForm({ username: recoveryForm.username, password: "" });
-      setRecoveryForm({ recoveryToken: "", username: "", newPassword: "" });
+      setRecoveryForm({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
       setNotice("Password changed. Sign in with your new password.");
     } catch (requestError) {
       setError(requestError.message);
@@ -244,6 +289,43 @@ function App() {
       setPasswordChange({ currentPassword: "", newPassword: "" });
       setPasswordChangeOpen(false);
       setNotice("Password changed successfully.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRequestProfileOtp() {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await request("/api/owner/profile/otp", credentials, {
+        method: "POST",
+        body: JSON.stringify({ whatsappNumber: profileForm.whatsappNumber })
+      });
+      setNotice("WhatsApp OTP sent to the owner number. It expires in 5 minutes.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSaveProfile(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await request("/api/owner/profile", credentials, {
+        method: "PUT",
+        body: JSON.stringify(profileForm)
+      });
+      setProfileForm({ ...profileForm, otp: "" });
+      setProfileOpen(false);
+      setNotice("PG details and verified WhatsApp number updated.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -448,6 +530,60 @@ function App() {
     }
   }
 
+  async function openRentPayments(resident, year = rentPaymentYear) {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const payments = await request(
+        `${RESIDENTS_API}/${resident.id}/rent-payments?year=${year}`,
+        credentials);
+      setRentPaymentResident(resident);
+      setRentPaymentYear(year);
+      setRentPayments(payments);
+      setPaymentDraft(null);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveRentPayment(event) {
+    event.preventDefault();
+    if (!rentPaymentResident || !paymentDraft) return;
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await request(
+        `${RESIDENTS_API}/${rentPaymentResident.id}/rent-payments/${rentPaymentYear}/${paymentDraft.month}`,
+        credentials,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            amount: Number(paymentDraft.amount),
+            paidDate: paymentDraft.paidDate,
+            method: paymentDraft.method
+          })
+        });
+      const payments = await request(
+        `${RESIDENTS_API}/${rentPaymentResident.id}/rent-payments?year=${rentPaymentYear}`,
+        credentials);
+      setRentPayments(payments);
+      setPaymentDraft(null);
+      setNotice(result.wasAlreadyPaid
+        ? "Rent payment details updated. No new WhatsApp confirmation was sent."
+        : result.whatsappNotificationSent
+          ? "Rent payment saved and WhatsApp confirmation sent."
+          : "Rent payment saved, but WhatsApp confirmation was not sent. Check the WhatsApp setup and resident mobile number.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function viewDocument(resident, documentType) {
     setLoading(true);
     setError("");
@@ -493,7 +629,7 @@ function App() {
           </a>
           <p className="eyebrow">OWNER PORTAL</p>
           <h1>{authMode === "SETUP" ? "Create your owner account." : authMode === "FORGOT" ? "Recover your account." : "Welcome back."}</h1>
-          <p className="muted">{authMode === "SETUP" ? "Each PG owner gets a separate login and private resident directory." : authMode === "FORGOT" ? "Use your private recovery token to reset your password." : "Sign in to securely manage your residents."}</p>
+          <p className="muted">{authMode === "SETUP" ? "Each PG owner gets a separate login and private resident directory." : authMode === "FORGOT" ? "Verify your WhatsApp number to reset your password." : "Sign in to securely manage your residents."}</p>
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
           {authMode === "LOGIN" && <form className="stack-form" onSubmit={handleLogin}>
@@ -520,21 +656,26 @@ function App() {
             </button>
           </form>}
           {authMode === "SETUP" && <form className="stack-form" onSubmit={handleSetupOwner}>
-            <label>Owner setup or registration token<SecretInput required value={setupForm.setupToken} onChange={(event) => setSetupForm({ ...setupForm, setupToken: event.target.value })} /></label>
+            <label>PG name<input maxLength="100" required value={setupForm.pgName} onChange={(event) => setSetupForm({ ...setupForm, pgName: event.target.value })} /></label>
             <label>Username<input autoComplete="username" minLength="3" maxLength="50" required value={setupForm.username} onChange={(event) => setSetupForm({ ...setupForm, username: event.target.value })} /></label>
             <label>Password (at least 12 characters)<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={setupForm.password} onChange={(event) => setSetupForm({ ...setupForm, password: event.target.value })} /></label>
+            <label>Owner WhatsApp number (India; +91 added automatically)<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.whatsappNumber} onChange={(event) => setSetupForm({ ...setupForm, whatsappNumber: event.target.value })} /></label>
+            <button type="button" className="button button-light" disabled={loading} onClick={handleRequestRegistrationOtp}>Send OTP to admin</button>
+            <label>OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={setupForm.otp} onChange={(event) => setSetupForm({ ...setupForm, otp: event.target.value })} /></label>
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
           </form>}
           {authMode === "FORGOT" && <form className="stack-form" onSubmit={handleConfirmPasswordReset}>
-            <label>Owner recovery token<SecretInput required value={recoveryForm.recoveryToken} onChange={(event) => setRecoveryForm({ ...recoveryForm, recoveryToken: event.target.value })} /></label>
             <label>Username<input autoComplete="username" required value={recoveryForm.username} onChange={(event) => setRecoveryForm({ ...recoveryForm, username: event.target.value })} /></label>
+            <label>Owner WhatsApp number (India; +91 added automatically)<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={recoveryForm.whatsappNumber} onChange={(event) => setRecoveryForm({ ...recoveryForm, whatsappNumber: event.target.value })} /></label>
+            <button type="button" className="button button-light" disabled={loading || !recoveryForm.username || !recoveryForm.whatsappNumber} onClick={handleRequestResetOtp}>Send password reset OTP</button>
+            <label>OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={recoveryForm.otp} onChange={(event) => setRecoveryForm({ ...recoveryForm, otp: event.target.value })} /></label>
             <label>New password (at least 12 characters)<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={recoveryForm.newPassword} onChange={(event) => setRecoveryForm({ ...recoveryForm, newPassword: event.target.value })} /></label>
             <button className="button button-primary button-wide" disabled={loading}>Reset password</button>
           </form>}
           {authMode === "LOGIN" && <>
             <button type="button" className="text-action" onClick={() => { setAuthMode("SETUP"); setError(""); setNotice(""); }}>Create owner account</button>
             <button type="button" className="text-action" onClick={() => { setAuthMode("FORGOT"); setError(""); setNotice(""); }}>Forgot password?</button>
-            <p className="login-footnote">Your password is stored as a one-way hash. Keep your recovery token in a secure password manager.</p>
+            <p className="login-footnote">Your password is stored as a one-way hash. Password resets use a WhatsApp OTP sent to your verified number.</p>
           </>}
           {authMode !== "LOGIN" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
         </section>
@@ -564,7 +705,8 @@ function App() {
           <span>haven<span className="brand-period">.</span></span>
         </a>
         <div className="topbar-right">
-          <span className="owner-label"><span className="online-dot" /> Owner dashboard</span>
+          <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
+          <button className="button button-light" onClick={() => setProfileOpen(true)}>PG settings</button>
           <button className="button button-light" onClick={() => setPasswordChangeOpen(true)}>Change password</button>
           <button className="button button-light" onClick={logout}>Sign out</button>
         </div>
@@ -619,6 +761,27 @@ function App() {
                 </form>
               </div>
             </div>
+
+            {profileOpen && <div className="dialog-backdrop">
+              <section className="resident-dialog panel document-viewer" role="dialog" aria-modal="true" aria-labelledby="pg-settings-title">
+                <div className="panel-heading">
+                  <div><p className="eyebrow">PROPERTY SETTINGS</p><h2 id="pg-settings-title">PG details and rent reminders</h2></div>
+                  <button className="icon-button" onClick={() => setProfileOpen(false)} aria-label="Close PG settings">×</button>
+                </div>
+                {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
+                <form className="stack-form password-change-form" onSubmit={handleSaveProfile}>
+                  <label>PG name<input maxLength="100" required value={profileForm.pgName} onChange={(event) => setProfileForm({ ...profileForm, pgName: event.target.value })} /></label>
+                  <label>Owner WhatsApp number (India; +91 added automatically)<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={profileForm.whatsappNumber || ""} onChange={(event) => setProfileForm({ ...profileForm, whatsappNumber: event.target.value })} /></label>
+                  <button type="button" className="button button-light" disabled={loading || !profileForm.whatsappNumber} onClick={handleRequestProfileOtp}>Send verification OTP</button>
+                  <label>WhatsApp OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={profileForm.otp} onChange={(event) => setProfileForm({ ...profileForm, otp: event.target.value })} /></label>
+                  <p className="muted">Automatic rent reminders are sent at 9:00 AM India time on each active resident's monthly joining-date day.</p>
+                  <div className="form-footer-actions">
+                    <button type="button" className="button button-light" onClick={() => setProfileOpen(false)}>Cancel</button>
+                    <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving…" : "Save PG settings"}</button>
+                  </div>
+                </form>
+              </section>
+            </div>}
 
             {passwordChangeOpen && <div className="dialog-backdrop">
               <section className="resident-dialog panel document-viewer" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
@@ -682,6 +845,7 @@ function App() {
                         </td>
                         <td>
                           <div className="row-actions">
+                            <button className="text-action" onClick={() => openRentPayments(resident)}>Rent history</button>
                             <button className="text-action" onClick={() => startEdit(resident)}>Edit</button>
                             {resident.status === "ACTIVE" && <button className="text-action text-danger" onClick={() => markVacated(resident)}>Vacate</button>}
                             <button className="text-action text-danger" onClick={() => permanentlyDeleteResident(resident)} disabled={loading}>Delete permanently</button>
@@ -696,6 +860,65 @@ function App() {
           </article>
 
         </section>
+
+        {rentPaymentResident && (
+          <div className="dialog-backdrop" onClick={() => setRentPaymentResident(null)}>
+            <section className="resident-dialog panel rent-payment-dialog" role="dialog" aria-modal="true" aria-labelledby="rent-payment-title" onClick={(event) => event.stopPropagation()}>
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">MONTHLY RENT</p>
+                  <h2 id="rent-payment-title">{rentPaymentResident.name} · Room {rentPaymentResident.roomNumber}</h2>
+                  <p className="muted">Record rent paid by month. Confirmation is sent to the resident by WhatsApp.</p>
+                </div>
+                <button className="icon-button" onClick={() => setRentPaymentResident(null)} aria-label="Close rent history">×</button>
+              </div>
+              {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
+              {notice && <div className="alert alert-success dialog-alert" role="status">{notice}</div>}
+              <div className="rent-year-selector">
+                <button className="button button-light" disabled={loading} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear - 1)}>Previous year</button>
+                <strong>{rentPaymentYear}</strong>
+                <button className="button button-light" disabled={loading || rentPaymentYear >= new Date().getFullYear()} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear + 1)}>Next year</button>
+              </div>
+              <div className="rent-month-grid">
+                {Array.from({ length: 12 }, (_, index) => {
+                  const month = index + 1;
+                  const payment = rentPayments.find((record) => record.month === month);
+                  const draftOpen = paymentDraft?.month === month;
+                  return (
+                    <article className={`rent-month-card${payment?.paid ? " rent-month-paid" : ""}`} key={month}>
+                      <div className="rent-month-heading">
+                        <strong>{new Date(rentPaymentYear, index, 1).toLocaleString("en", { month: "long" })}</strong>
+                        <span className={`rent-payment-status${payment?.paid ? " is-paid" : ""}`}>{payment?.paid ? "Paid" : "Unpaid"}</span>
+                      </div>
+                      {payment?.paid ? (
+                        <div className="rent-payment-detail">
+                          <span>₹{Number(payment.amount).toLocaleString("en-IN")} · {payment.method?.replace("_", " ")}</span>
+                          <small>Paid {payment.paidDate}</small>
+                        </div>
+                      ) : <p className="rent-payment-detail">Monthly rent: ₹{Number(rentPaymentResident.rent).toLocaleString("en-IN")}</p>}
+                      {draftOpen ? (
+                        <form className="rent-payment-form" onSubmit={saveRentPayment}>
+                          <label>Amount (₹)<input type="number" min="0.01" step="0.01" required value={paymentDraft.amount} onChange={(event) => setPaymentDraft({ ...paymentDraft, amount: event.target.value })} /></label>
+                          <label>Paid date<input type="date" required value={paymentDraft.paidDate} onChange={(event) => setPaymentDraft({ ...paymentDraft, paidDate: event.target.value })} /></label>
+                          <label>Payment method<select required value={paymentDraft.method} onChange={(event) => setPaymentDraft({ ...paymentDraft, method: event.target.value })}><option value="CASH">Cash</option><option value="UPI">UPI</option><option value="BANK_TRANSFER">Bank transfer</option><option value="OTHER">Other</option></select></label>
+                          <div className="rent-card-actions">
+                            <button type="button" className="button button-light" onClick={() => setPaymentDraft(null)}>Cancel</button>
+                            <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving…" : "Save payment"}</button>
+                          </div>
+                        </form>
+                      ) : <button type="button" className="text-action" disabled={loading} onClick={() => setPaymentDraft({
+                        month,
+                        amount: payment?.amount ? String(payment.amount) : String(rentPaymentResident.rent),
+                        paidDate: payment?.paidDate || new Date().toISOString().slice(0, 10),
+                        method: payment?.method || "CASH"
+                      })}>{payment?.paid ? "Edit payment" : "Mark rent paid"}</button>}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        )}
 
         {formOpen && (
           <div className="dialog-backdrop">

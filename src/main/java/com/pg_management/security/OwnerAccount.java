@@ -25,13 +25,31 @@ public class OwnerAccount {
 	@Column(name = "password_hash", nullable = false, length = 100)
 	private String passwordHash;
 
+	@Column(name = "pg_name", nullable = false, length = 100)
+	private String pgName;
+
+	@Column(name = "whatsapp_number", unique = true, length = 20)
+	private String whatsappNumber;
+
+	@Column(name = "whatsapp_verified", nullable = false)
+	private boolean whatsappVerified;
+
+	@Column(name = "rent_due_day", nullable = false, columnDefinition = "int not null default 5")
+	private int legacyRentDueDay = 5;
+
 	protected OwnerAccount() {
 	}
 
-	public OwnerAccount(String username, String passwordHash) {
+	public OwnerAccount(String username, String passwordHash, String pgName, String whatsappNumber) {
 		this.accountScope = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 		this.username = username;
 		this.passwordHash = passwordHash;
+		this.pgName = pgName;
+		this.whatsappNumber = whatsappNumber;
+	}
+
+	public OwnerAccount(String username, String passwordHash) {
+		this(username, passwordHash, "Test PG", null);
 	}
 
 	public Long getId() {
@@ -44,6 +62,20 @@ public class OwnerAccount {
 
 	public String getPasswordHash() {
 		return passwordHash;
+	}
+
+	public String getPgName() {
+		return pgName;
+	}
+
+	public String getWhatsappNumber() {
+		return whatsappNumber;
+	}
+
+	public void updateProfile(String pgName, String whatsappNumber) {
+		this.pgName = pgName;
+		this.whatsappNumber = whatsappNumber;
+		this.whatsappVerified = true;
 	}
 
 	public void changePassword(String passwordHash) {

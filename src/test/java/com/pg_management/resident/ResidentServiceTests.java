@@ -31,6 +31,9 @@ class ResidentServiceTests {
 	private ResidentRepository residentRepository;
 
 	@Mock
+	private RentPaymentRepository rentPaymentRepository;
+
+	@Mock
 	private PrivateDocumentStorageService documentStorage;
 
 	private final OwnerAccount owner = mock(OwnerAccount.class);
@@ -98,6 +101,7 @@ class ResidentServiceTests {
 
 		residentService.permanentlyDelete(owner, 7L);
 
+		verify(rentPaymentRepository).deleteAllByResident(resident);
 		verify(residentRepository).delete(resident);
 		verify(documentStorage).delete("photo-key.png");
 		verify(documentStorage).delete("proof-key.pdf");

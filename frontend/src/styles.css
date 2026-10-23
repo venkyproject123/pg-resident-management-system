@@ -147,6 +147,21 @@ td { height: 60px; padding: 7px 12px; border-top: 1px solid #f0f2ef; color: #687
 .resident-dialog-heading .muted { margin: 7px 0 0; font-size: 12px; }
 .resident-dialog > .resident-form { overflow-y: auto; padding: 22px 28px 24px; }
 .password-change-form { padding: 0 18px 18px; }
+.rent-payment-dialog { width: min(950px, calc(100% - 32px)); max-height: min(90vh, 900px); overflow-y: auto; }
+.rent-year-selector { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 0 20px 18px; }
+.rent-month-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0 20px 20px; }
+.rent-month-card { display: grid; align-content: start; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+.rent-month-paid { border-color: #c4dfcd; background: #f7fbf8; }
+.rent-month-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rent-payment-status { color: #9b6d28; font-size: 10px; font-weight: 700; }
+.rent-payment-status.is-paid { color: #27814d; }
+.rent-payment-detail { display: grid; gap: 4px; margin: 0; color: #5f6d63; font-size: 11px; }
+.rent-payment-detail small { color: #88958c; font-size: 10px; }
+.rent-payment-form { display: grid; gap: 10px; }
+.rent-payment-form label { font-size: 10px; }
+.rent-payment-form input, .rent-payment-form select { height: 36px; width: 100%; padding: 0 8px; border: 1px solid #e4e9e4; border-radius: 7px; background: #fff; color: #25332b; font-size: 11px; }
+.rent-card-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.rent-card-actions .button { min-height: 34px; padding: 0 9px; font-size: 10px; }
 .resident-fields { display: grid; gap: 15px; }
 .attachments-section { padding: 19px; border: 1px solid #e7ede7; border-radius: 13px; background: #f8faf7; }
 .attachments-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
@@ -191,9 +206,13 @@ td { height: 60px; padding: 7px 12px; border-top: 1px solid #f0f2ef; color: #687
   .login-card { min-height: 100vh; }
   .login-card > .brand { margin-bottom: 55px; }
   .form-row { gap: 12px; }
+  .rent-month-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 540px) {
-  body { min-width: 340px; }
+  body { min-width: 340px;     .rent-month-grid { grid-template-columns: 1fr; padding: 0 14px 14px; }
+    .rent-year-selector { gap: 8px; padding: 0 14px 14px; }
+    .rent-year-selector .button { min-height: 34px; padding: 0 8px; font-size: 10px; }
+  }
   .topbar { height: 59px; }
   .owner-label { display: none; }
   .page-content { width: 92%; }
