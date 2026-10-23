@@ -1,9 +1,12 @@
 package com.pg_management.security;
 
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.servlet.DispatcherType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -30,5 +33,13 @@ class OwnerAuthControllerTests {
 				.andExpect(status().isAccepted());
 
 		verify(ownerAuthService).requestRegistrationOtp("127.0.0.1");
+	}
+
+	@Test
+	void errorDispatchDoesNotRequireAuthentication() throws Exception {
+		mockMvc.perform(get("/error").with(request -> {
+			request.setDispatcherType(DispatcherType.ERROR);
+			return request;
+		})).andExpect(result -> assertNotEquals(401, result.getResponse().getStatus()));
 	}
 }

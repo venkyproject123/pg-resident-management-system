@@ -2,6 +2,7 @@ package com.pg_management.security;
 
 import java.util.Arrays;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -67,6 +68,7 @@ public class SecurityConfig {
 			.csrf(AbstractHttpConfigurer::disable)
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(requests -> requests
+					.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 					.requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
 					.requestMatchers(
 							"/api/owner/setup-status",
