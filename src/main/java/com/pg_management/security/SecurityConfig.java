@@ -2,9 +2,9 @@ package com.pg_management.security;
 
 import java.util.Arrays;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -52,6 +52,7 @@ public class SecurityConfig {
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(requests -> requests
 					.requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+					.requestMatchers(HttpMethod.POST, "/api/owner/registration-otp").permitAll()
 					.requestMatchers(
 							"/api/owner/setup-status",
 							"/api/owner/setup",
