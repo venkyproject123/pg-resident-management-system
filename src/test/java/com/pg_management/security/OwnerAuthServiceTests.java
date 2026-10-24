@@ -1,5 +1,7 @@
 package com.pg_management.security;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -34,7 +36,7 @@ class OwnerAuthServiceTests {
 	@BeforeEach
 	void createService() {
 		ownerAuthService = new OwnerAuthService(
-				ownerAccountRepository, ownerOtpService, passwordEncoder, jdbcTemplate);
+				ownerAccountRepository, ownerOtpService, passwordEncoder, jdbcTemplate, "admin");
 	}
 
 	@Test
@@ -45,30 +47,42 @@ class OwnerAuthServiceTests {
 	}
 
 	@Test
-	void firstRegistrationClaimsExistingUnassignedResidents() {
-		OwnerAccount owner = new OwnerAccount("owner", passwordEncoder.encode("long-password-here"),
-				"Sample PG", "+919876543210");
-		when(ownerAccountRepository.count()).thenReturn(0L);
-		when(ownerOtpService.registerOwner("owner", "long-password-here", "Sample PG", "+919876543210", "123456"))
-				.thenReturn(owner);
+	void registrationCreatesAnUnapprovedOwnerWithoutOtp() {
+		when(ownerAccountRepository.findByUsername("new-owner")).thenReturn(Optional.empty());
+		when(ownerAccountRepository.findByWhatsappNumber("+919876543210")).thenReturn(Optional.empty());
+		when(ownerAccountRepository.saveAndFlush(any(OwnerAccount.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0));
 
-		ownerAuthService.registerOwner("owner", "long-password-here", "Sample PG", "+919876543210", "123456");
+		ownerAuthService.registerOwner("new-owner", "long-password-here", "Sample PG", "9876543210");
 
-		verify(jdbcTemplate).update("UPDATE residents SET owner_id = ? WHERE owner_id IS NULL", owner.getId());
+		org.mockito.ArgumentCaptor<OwnerAccount> owner = org.mockito.ArgumentCaptor.forClass(OwnerAccount.class);
+		verify(ownerAccountRepository).saveAndFlush(owner.capture());
+		assertFalse(owner.getValue().isApproved());
+		assertTrue(passwordEncoder.matches("long-password-here", owner.getValue().getPasswordHash()));
+		assertEquals("+919876543210", owner.getValue().getWhatsappNumber());
+		verify(jdbcTemplate, org.mockito.Mockito.never()).update(any(String.class), any(Object.class));
 	}
 
 	@Test
-	void laterOwnerRegistrationDoesNotReassignExistingResidents() {
-		OwnerAccount owner = new OwnerAccount("second-owner", "hash", "Second PG", "+919876543211");
-		when(ownerAccountRepository.count()).thenReturn(1L);
-		when(ownerOtpService.registerOwner("second-owner", "another-long-password", "Second PG",
-				"+919876543211", "654321")).thenReturn(owner);
+	void reservedAdminUsernameCannotBeRegisteredAsOwner() {
+		org.springframework.web.server.ResponseStatusException exception =
+				org.junit.jupiter.api.Assertions.assertThrows(
+						org.springframework.web.server.ResponseStatusException.class,
+						() -> ownerAuthService.registerOwner("ADMIN", "long-password-here", "Sample PG", "9876543210"));
 
-		ownerAuthService.registerOwner(
-				"second-owner", "another-long-password", "Second PG", "+919876543211", "654321");
+		assertTrue(exception.getReason().contains("reserved"));
+	}
 
-		verify(jdbcTemplate, org.mockito.Mockito.never())
-				.update(any(String.class), any(Object.class));
+	@Test
+	void firstApprovedOwnerClaimsExistingUnassignedResidents() {
+		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210", false);
+		when(ownerAccountRepository.findById(7L)).thenReturn(Optional.of(owner));
+		when(ownerAccountRepository.countByApprovedTrue()).thenReturn(0L);
+
+		ownerAuthService.approveOwner(7L);
+
+		assertTrue(owner.isApproved());
+		verify(jdbcTemplate).update("UPDATE residents SET owner_id = ? WHERE owner_id IS NULL", owner.getId());
 	}
 
 	@Test

@@ -1,5 +1,8 @@
 package com.pg_management.security;
 
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,16 +18,19 @@ public class OwnerAuthService {
 	private final OwnerOtpService ownerOtpService;
 	private final PasswordEncoder passwordEncoder;
 	private final JdbcTemplate jdbcTemplate;
+	private final String adminUsername;
 
 	public OwnerAuthService(
 			OwnerAccountRepository ownerAccountRepository,
 			OwnerOtpService ownerOtpService,
 			PasswordEncoder passwordEncoder,
-			JdbcTemplate jdbcTemplate) {
+			JdbcTemplate jdbcTemplate,
+			@Value("${app.admin.username:}") String adminUsername) {
 		this.ownerAccountRepository = ownerAccountRepository;
 		this.ownerOtpService = ownerOtpService;
 		this.passwordEncoder = passwordEncoder;
 		this.jdbcTemplate = jdbcTemplate;
+		this.adminUsername = adminUsername;
 	}
 
 	@Transactional(readOnly = true)
@@ -32,20 +38,43 @@ public class OwnerAuthService {
 		return ownerAccountRepository.count() == 0;
 	}
 
-	public void requestRegistrationOtp(String requesterAddress) {
-		ownerOtpService.requestRegistrationOtp(requesterAddress);
-	}
-
 	public void registerOwner(
 			String username,
 			String password,
 			String pgName,
-			String whatsappNumber,
-			String otp) {
-		boolean firstOwner = ownerAccountRepository.count() == 0;
-		OwnerAccount owner = ownerOtpService.registerOwner(
-				username, password, pgName, whatsappNumber, otp);
-		if (firstOwner) {
+			String mobileNumber) {
+		if (!adminUsername.isBlank() && username.equalsIgnoreCase(adminUsername)) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is reserved");
+		}
+		if (ownerAccountRepository.findByUsername(username).isPresent()) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already registered");
+		}
+		String normalizedNumber = mobileNumber.matches("[6-9][0-9]{9}") ? "+91" + mobileNumber : mobileNumber;
+		if (ownerAccountRepository.findByWhatsappNumber(normalizedNumber).isPresent()) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "That mobile number is already registered");
+		}
+		ownerAccountRepository.saveAndFlush(new OwnerAccount(
+				username, passwordEncoder.encode(password), pgName.trim(), normalizedNumber, false));
+	}
+
+	@Transactional(readOnly = true)
+	public List<PendingOwner> findPendingOwners() {
+		return ownerAccountRepository.findAllByApprovedFalseOrderByIdAsc().stream()
+				.map(owner -> new PendingOwner(
+						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber()))
+				.toList();
+	}
+
+	public void approveOwner(Long ownerId) {
+		OwnerAccount owner = ownerAccountRepository.findById(ownerId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"));
+		if (owner.isApproved()) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "This owner is already approved");
+		}
+		boolean firstApprovedOwner = ownerAccountRepository.countByApprovedTrue() == 0;
+		owner.approve();
+		ownerAccountRepository.save(owner);
+		if (firstApprovedOwner) {
 			jdbcTemplate.update("UPDATE residents SET owner_id = ? WHERE owner_id IS NULL", owner.getId());
 		}
 	}
@@ -89,6 +118,9 @@ public class OwnerAuthService {
 	}
 
 	public record OwnerProfile(String pgName, String whatsappNumber) {
+	}
+
+	public record PendingOwner(Long id, String username, String pgName, String mobileNumber) {
 	}
 
 	public record ProfileUpdateRequest(

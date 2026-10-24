@@ -34,6 +34,9 @@ public class OwnerAccount {
 	@Column(name = "whatsapp_verified", nullable = false)
 	private boolean whatsappVerified;
 
+	@Column(nullable = false, columnDefinition = "boolean not null default true")
+	private boolean approved = true;
+
 	@Column(name = "rent_due_day", nullable = false, columnDefinition = "int not null default 5")
 	private int legacyRentDueDay = 5;
 
@@ -41,11 +44,16 @@ public class OwnerAccount {
 	}
 
 	public OwnerAccount(String username, String passwordHash, String pgName, String whatsappNumber) {
+		this(username, passwordHash, pgName, whatsappNumber, true);
+	}
+
+	public OwnerAccount(String username, String passwordHash, String pgName, String whatsappNumber, boolean approved) {
 		this.accountScope = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 		this.username = username;
 		this.passwordHash = passwordHash;
 		this.pgName = pgName;
 		this.whatsappNumber = whatsappNumber;
+		this.approved = approved;
 	}
 
 	public OwnerAccount(String username, String passwordHash) {
@@ -70,6 +78,14 @@ public class OwnerAccount {
 
 	public String getWhatsappNumber() {
 		return whatsappNumber;
+	}
+
+	public boolean isApproved() {
+		return approved;
+	}
+
+	public void approve() {
+		this.approved = true;
 	}
 
 	public void updateProfile(String pgName, String whatsappNumber) {

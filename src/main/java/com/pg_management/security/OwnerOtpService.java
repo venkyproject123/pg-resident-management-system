@@ -8,7 +8,6 @@ import java.time.Instant;
 import java.util.regex.Pattern;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -33,24 +32,16 @@ public class OwnerOtpService {
 	private final OwnerAccountRepository ownerAccountRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final WhatsAppCloudApiClient whatsAppClient;
-	private final String adminWhatsappNumber;
 
 	public OwnerOtpService(
 			OwnerOtpChallengeRepository challengeRepository,
 			OwnerAccountRepository ownerAccountRepository,
 			PasswordEncoder passwordEncoder,
-			WhatsAppCloudApiClient whatsAppClient,
-			@Value("${app.whatsapp.admin-number:}") String adminWhatsappNumber) {
+			WhatsAppCloudApiClient whatsAppClient) {
 		this.challengeRepository = challengeRepository;
 		this.ownerAccountRepository = ownerAccountRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.whatsAppClient = whatsAppClient;
-		this.adminWhatsappNumber = adminWhatsappNumber;
-	}
-
-	public void requestRegistrationOtp(String requesterAddress) {
-		String number = getAdminWhatsappNumber();
-		sendOtp(number, OwnerOtpPurpose.REGISTRATION, requesterAddress);
 	}
 
 	public void requestPasswordResetOtp(String username, String whatsappNumber, String requesterAddress) {
@@ -88,25 +79,6 @@ public class OwnerOtpService {
 	@Scheduled(cron = "0 0 * * * *")
 	public void deleteExpiredChallenges() {
 		challengeRepository.deleteByExpiresAtBefore(Instant.now());
-	}
-
-	public OwnerAccount registerOwner(
-			String username,
-			String password,
-			String pgName,
-			String whatsappNumber,
-			String otp) {
-		String number = normalizeNumber(whatsappNumber);
-		if (ownerAccountRepository.findByUsername(username).isPresent()) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already registered");
-		}
-		if (ownerAccountRepository.findByWhatsappNumber(number).isPresent()) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "That WhatsApp number is already registered");
-		}
-		consumeOtp(getAdminWhatsappNumber(), OwnerOtpPurpose.REGISTRATION, otp);
-		OwnerAccount owner = ownerAccountRepository.saveAndFlush(new OwnerAccount(
-				username, passwordEncoder.encode(password), pgName.trim(), number));
-		return owner;
 	}
 
 	public void resetPassword(String username, String whatsappNumber, String otp, String newPassword) {
@@ -172,14 +144,6 @@ public class OwnerOtpService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a valid mobile number, such as 9876543210");
 		}
 		return normalized;
-	}
-
-	private String getAdminWhatsappNumber() {
-		if (adminWhatsappNumber == null || adminWhatsappNumber.isBlank()) {
-			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-					"Configure WHATSAPP_ADMIN_NUMBER in the backend environment before owner registration");
-		}
-		return normalizeNumber(adminWhatsappNumber);
 	}
 
 	private String hashRequester(String requesterAddress) {

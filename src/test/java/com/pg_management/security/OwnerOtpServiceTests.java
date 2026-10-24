@@ -1,13 +1,12 @@
 package com.pg_management.security;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
-import java.time.Duration;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -32,16 +31,15 @@ class OwnerOtpServiceTests {
 	private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 
 	@Test
-	void registrationOtpIsSentAndOnlyItsHashIsStored() {
+	void passwordResetOtpIsSentAndOnlyItsHashIsStored() {
 		OwnerOtpService service = new OwnerOtpService(
-				challengeRepository, ownerAccountRepository, passwordEncoder, whatsAppClient, "+919876543210");
-		when(challengeRepository.countByWhatsappNumberAndPurposeAndCreatedAtAfter(
-				any(), any(), any())).thenReturn(0L);
-		when(challengeRepository.countByRequesterKeyAndCreatedAtAfter(any(), any())).thenReturn(0L);
+				challengeRepository, ownerAccountRepository, passwordEncoder, whatsAppClient);
+		when(ownerAccountRepository.findByUsernameAndWhatsappNumber("owner", "+919876543210"))
+				.thenReturn(Optional.of(new OwnerAccount("owner", "hash", "Sample PG", "+919876543210")));
 		when(challengeRepository.save(any(OwnerOtpChallenge.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
 
-		service.requestRegistrationOtp("127.0.0.1");
+		service.requestPasswordResetOtp("owner", "9876543210", "127.0.0.1");
 
 		ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
 		verify(whatsAppClient).sendOtp(org.mockito.ArgumentMatchers.eq("+919876543210"), code.capture());
@@ -50,26 +48,6 @@ class OwnerOtpServiceTests {
 		assertTrue(code.getValue().matches("[0-9]{6}"));
 		assertTrue(passwordEncoder.matches(code.getValue(), challenge.getValue().getCodeHash()));
 		assertTrue(challenge.getValue().getExpiresAt().isAfter(Instant.now()));
-	}
-
-	@Test
-	void registrationUsesAdminOtpAndAddsIndiaCountryCodeToOwnerNumber() {
-		OwnerOtpService service = new OwnerOtpService(
-				challengeRepository, ownerAccountRepository, passwordEncoder, whatsAppClient, "+919999999999");
-		OwnerOtpChallenge challenge = new OwnerOtpChallenge(
-				"+919999999999", OwnerOtpPurpose.REGISTRATION, passwordEncoder.encode("123456"),
-				"requester", Instant.now(), Instant.now().plus(Duration.ofMinutes(5)));
-		when(ownerAccountRepository.findByUsername("new-owner")).thenReturn(Optional.empty());
-		when(ownerAccountRepository.findByWhatsappNumber("+919876543210")).thenReturn(Optional.empty());
-		when(challengeRepository.findFirstByWhatsappNumberAndPurposeOrderByCreatedAtDesc(
-				"+919999999999", OwnerOtpPurpose.REGISTRATION)).thenReturn(Optional.of(challenge));
-		when(ownerAccountRepository.saveAndFlush(any(OwnerAccount.class)))
-				.thenAnswer(invocation -> invocation.getArgument(0));
-
-		OwnerAccount owner = service.registerOwner(
-				"new-owner", "a-long-test-password", "Sample PG", "9876543210", "123456");
-
-		assertEquals("+919876543210", owner.getWhatsappNumber());
-		verify(challengeRepository).delete(challenge);
+		assertEquals(OwnerOtpPurpose.PASSWORD_RESET, challenge.getValue().getPurpose());
 	}
 }

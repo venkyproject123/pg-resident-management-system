@@ -6,7 +6,6 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,14 +15,12 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
 public class SecurityConfig {
 
 	@Bean
@@ -49,19 +46,6 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	@Order(1)
-	SecurityFilterChain registrationOtpSecurityFilterChain(HttpSecurity http) throws Exception {
-		http
-			.securityMatcher("/api/owner/registration-otp")
-			.cors(Customizer.withDefaults())
-			.csrf(AbstractHttpConfigurer::disable)
-			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-			.authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
-		return http.build();
-	}
-
-	@Bean
-	@Order(2)
 	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		http
 			.cors(Customizer.withDefaults())
@@ -73,10 +57,10 @@ public class SecurityConfig {
 					.requestMatchers(
 							"/api/owner/setup-status",
 							"/api/owner/setup",
-							"/api/owner/setup/**",
-							"/api/owner/registration-otp",
 							"/api/owner/password-reset",
 							"/api/owner/password-reset/**").permitAll()
+					.requestMatchers("/api/admin/**").hasRole("ADMIN")
+					.requestMatchers("/api/**").hasRole("OWNER")
 					.anyRequest().authenticated())
 			.httpBasic(Customizer.withDefaults());
 

@@ -2,6 +2,7 @@ package com.pg_management.security;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,11 +29,36 @@ class OwnerAuthControllerTests {
 	private OwnerUserDetailsService ownerUserDetailsService;
 
 	@Test
-	void registrationOtpCanBeRequestedWithoutAuthentication() throws Exception {
-		mockMvc.perform(post("/api/owner/registration-otp"))
+	void ownerRegistrationNeedsNoOtpAndWaitsForAdminApproval() throws Exception {
+		mockMvc.perform(post("/api/owner/setup")
+						.contentType("application/json")
+						.content("""
+								{
+								  "username": "new-owner",
+								  "password": "a-long-owner-password",
+								  "pgName": "Sample PG",
+								  "mobileNumber": "9876543210"
+								}
+								"""))
 				.andExpect(status().isAccepted());
 
-		verify(ownerAuthService).requestRegistrationOtp("127.0.0.1");
+		verify(ownerAuthService).registerOwner("new-owner", "a-long-owner-password", "Sample PG", "9876543210");
+		verifyNoMoreInteractions(ownerAuthService);
+	}
+
+	@Test
+	void ownerRegistrationRejectsPasswordsShorterThanTwelveCharacters() throws Exception {
+		mockMvc.perform(post("/api/owner/setup")
+						.contentType("application/json")
+						.content("""
+								{
+								  "username": "new-owner",
+								  "password": "too-short",
+								  "pgName": "Sample PG",
+								  "mobileNumber": "9876543210"
+								}
+								"""))
+				.andExpect(status().isBadRequest());
 	}
 
 	@Test
