@@ -57,14 +57,6 @@ public class OwnerAuthController {
 		return ResponseEntity.noContent().build();
 	}
 
-	@PostMapping("/password/change")
-	public ResponseEntity<Void> changePassword(
-			Authentication authentication,
-			@Valid @RequestBody PasswordChange request) {
-		ownerAuthService.changePassword(authentication.getName(), request.currentPassword(), request.newPassword());
-		return ResponseEntity.noContent().build();
-	}
-
 	@GetMapping("/profile")
 	public OwnerAuthService.OwnerProfile profile(Authentication authentication) {
 		return ownerAuthService.getProfile(authentication.getName());
@@ -114,8 +106,4 @@ public class OwnerAuthController {
 			@NotBlank @Pattern(regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String whatsappNumber) {
 	}
 
-	public record PasswordChange(
-			@NotBlank String currentPassword,
-			@NotBlank @Size(min = 12, max = 128) String newPassword) {
-	}
 }

@@ -40,6 +40,37 @@ a { color: inherit; text-decoration: none; }
 .login-card .eyebrow { margin-bottom: 10px; color: var(--green); }
 .login-card h1 { margin: 0; font: 700 35px "Segoe UI", Arial, sans-serif; letter-spacing: -1.8px; }
 .login-card > .muted { margin: 10px 0 30px; font-size: 14px; }
+.login-card.admin-console-card { justify-content: flex-start; width: min(760px, calc(100% - 48px)); padding: 35px 0; }
+.admin-console-card > .brand { margin-bottom: 30px; }
+.admin-owner-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 22px; }
+.admin-owner-stat { display: flex; align-items: center; justify-content: space-between; min-height: 72px; padding: 14px 16px; border: 1px solid #e4eae4; border-radius: 11px; background: #fff; color: #59675e; }
+.admin-owner-stat span { font-size: 12px; font-weight: 600; }
+.admin-owner-stat strong { color: #253c2e; font-size: 24px; }
+.admin-owner-tabs { display: flex; gap: 7px; border-bottom: 1px solid #e6ebe6; }
+.admin-owner-tab { display: inline-flex; align-items: center; gap: 8px; margin-bottom: -1px; padding: 11px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #77847b; font-size: 12px; font-weight: 700; }
+.admin-owner-tab.active { border-bottom-color: var(--green); color: var(--green-dark); }
+.admin-owner-tab span { display: grid; min-width: 20px; height: 20px; place-items: center; padding: 0 5px; border-radius: 10px; background: #eef2ee; color: #59675e; font-size: 10px; }
+.admin-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 19px 0 12px; }
+.admin-list-heading h2 { margin: 0; color: #2b3930; font-size: 15px; }
+.admin-list-heading p { margin: 5px 0 0; color: #87928a; font-size: 11px; line-height: 1.5; }
+.admin-owner-list { display: grid; max-height: 47vh; gap: 10px; overflow-y: auto; padding: 1px 2px 2px 1px; }
+.admin-owner-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid #e4eae4; border-radius: 12px; background: #fff; }
+.admin-owner-card-main { display: flex; min-width: 0; align-items: flex-start; gap: 12px; }
+.admin-owner-avatar { display: grid; flex: 0 0 38px; width: 38px; height: 38px; place-items: center; border-radius: 11px; background: #edf4ee; color: var(--green); font-size: 16px; font-weight: 700; }
+.admin-owner-info { display: grid; min-width: 0; gap: 10px; }
+.admin-owner-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.admin-owner-title > strong { overflow-wrap: anywhere; color: #2b3930; font-size: 13px; }
+.owner-status { padding: 4px 8px; border-radius: 12px; font-size: 9px; font-weight: 700; }
+.owner-status-pending { background: #fff6e5; color: #91630c; }
+.owner-status-approved { background: #eaf6ef; color: #2c7549; }
+.admin-owner-details { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.admin-owner-details > span { display: grid; gap: 3px; overflow-wrap: anywhere; color: #536158; font-size: 11px; }
+.admin-owner-details small { color: #939c95; font-size: 8px; font-weight: 700; letter-spacing: .7px; }
+.admin-empty-state { display: grid; justify-items: center; gap: 8px; padding: 30px 15px; border: 1px dashed #dbe4dc; border-radius: 12px; background: #fbfcfb; text-align: center; }
+.admin-empty-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: #edf5ef; color: var(--green); font-size: 16px; font-weight: 700; }
+.admin-empty-state strong { color: #37463b; font-size: 12px; }
+.admin-empty-state p { margin: 0; color: #87928a; font-size: 11px; }
+.admin-console-card > .text-action { align-self: flex-start; margin-top: 18px; }
 .stack-form { display: grid; gap: 18px; }
 .approval-card { display: grid; gap: 8px; padding: 16px; border: 1px solid #e1e8e3; border-radius: 12px; background: #fff; }
 .approval-card > span { color: #68766d; font-size: 13px; }
@@ -206,7 +237,9 @@ td { height: 60px; padding: 7px 12px; border-top: 1px solid #f0f2ef; color: #687
   .login-shell { grid-template-columns: 1fr; }
   .login-aside { display: none; }
   .login-card { min-height: 100vh; }
+  .login-card.admin-console-card { min-height: 100vh; }
   .login-card > .brand { margin-bottom: 55px; }
+  .admin-console-card > .brand { margin-bottom: 30px; }
   .form-row { gap: 12px; }
   .rent-month-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -217,6 +250,11 @@ td { height: 60px; padding: 7px 12px; border-top: 1px solid #f0f2ef; color: #687
   }
   .topbar { height: 59px; }
   .owner-label { display: none; }
+  .admin-owner-card { align-items: stretch; flex-direction: column; }
+  .admin-owner-card > .button { width: 100%; }
+  .admin-owner-details { gap: 8px 14px; }
+  .admin-list-heading { align-items: flex-start; }
+  .admin-list-heading > .button { flex: 0 0 auto; min-height: 35px; padding: 0 10px; font-size: 10px; }
   .page-content { width: 92%; }
   .page-heading { align-items: start; padding-top: 27px; }
   .page-heading h1 { font-size: 24px; }

@@ -86,13 +86,16 @@ class OwnerAuthServiceTests {
 	}
 
 	@Test
-	void passwordChangeVerifiesCurrentPassword() {
-		OwnerAccount owner = new OwnerAccount("owner", passwordEncoder.encode("old-password-here"));
-		when(ownerAccountRepository.findByUsername("owner")).thenReturn(Optional.of(owner));
+	void approvedOwnerListIncludesApprovedAccounts() {
+		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210");
+		when(ownerAccountRepository.findAllByApprovedTrueOrderByIdAsc()).thenReturn(java.util.List.of(owner));
 
-		ownerAuthService.changePassword("owner", "old-password-here", "new-password-here");
+		var approvedOwners = ownerAuthService.findApprovedOwners();
 
-		assertTrue(passwordEncoder.matches("new-password-here", owner.getPasswordHash()));
-		verify(ownerAccountRepository).save(owner);
+		assertEquals(1, approvedOwners.size());
+		assertEquals("Sample PG", approvedOwners.get(0).pgName());
+		assertEquals("owner", approvedOwners.get(0).username());
+		assertEquals("+919876543210", approvedOwners.get(0).mobileNumber());
 	}
+
 }

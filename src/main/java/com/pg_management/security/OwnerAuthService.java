@@ -58,9 +58,17 @@ public class OwnerAuthService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<PendingOwner> findPendingOwners() {
+	public List<OwnerSummary> findPendingOwners() {
 		return ownerAccountRepository.findAllByApprovedFalseOrderByIdAsc().stream()
-				.map(owner -> new PendingOwner(
+				.map(owner -> new OwnerSummary(
+						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber()))
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
+	public List<OwnerSummary> findApprovedOwners() {
+		return ownerAccountRepository.findAllByApprovedTrueOrderByIdAsc().stream()
+				.map(owner -> new OwnerSummary(
 						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber()))
 				.toList();
 	}
@@ -107,20 +115,10 @@ public class OwnerAuthService {
 		ownerOtpService.resetPassword(username, whatsappNumber, otp, newPassword);
 	}
 
-	public void changePassword(String username, String currentPassword, String newPassword) {
-		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
-		if (!passwordEncoder.matches(currentPassword, owner.getPasswordHash())) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
-		}
-		owner.changePassword(passwordEncoder.encode(newPassword));
-		ownerAccountRepository.save(owner);
-	}
-
 	public record OwnerProfile(String pgName, String whatsappNumber) {
 	}
 
-	public record PendingOwner(Long id, String username, String pgName, String mobileNumber) {
+	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber) {
 	}
 
 	public record ProfileUpdateRequest(

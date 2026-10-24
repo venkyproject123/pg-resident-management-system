@@ -20,8 +20,13 @@ public class AdminController {
 	}
 
 	@GetMapping("/pending")
-	public List<OwnerAuthService.PendingOwner> pendingOwners() {
+	public List<OwnerAuthService.OwnerSummary> pendingOwners() {
 		return ownerAuthService.findPendingOwners();
+	}
+
+	@GetMapping("/approved")
+	public List<OwnerAuthService.OwnerSummary> approvedOwners() {
+		return ownerAuthService.findApprovedOwners();
 	}
 
 	@PutMapping("/{ownerId}/approve")

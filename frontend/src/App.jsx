@@ -125,12 +125,12 @@ function App() {
   const [adminCredentials, setAdminCredentials] = useState(null);
   const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
   const [pendingOwners, setPendingOwners] = useState([]);
+  const [approvedOwners, setApprovedOwners] = useState([]);
+  const [adminOwnersTab, setAdminOwnersTab] = useState("PENDING");
   const [authMode, setAuthMode] = useState("LOGIN");
   const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", mobileNumber: "" });
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
   const [recoveryForm, setRecoveryForm] = useState({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
-  const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
-  const [passwordChange, setPasswordChange] = useState({ currentPassword: "", newPassword: "" });
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ pgName: "", whatsappNumber: "", otp: "" });
   const [residents, setResidents] = useState([]);
@@ -241,14 +241,45 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const pending = await request(
-        "/api/admin/owners/pending",
-        adminLoginForm,
-        {},
-        "Admin login failed. Check the admin username and password."
-      );
+      const [pending, approved] = await Promise.all([
+        request(
+          "/api/admin/owners/pending",
+          adminLoginForm,
+          {},
+          "Admin login failed. Check the admin username and password."
+        ),
+        request(
+          "/api/admin/owners/approved",
+          adminLoginForm,
+          {},
+          "Admin login failed. Check the admin username and password."
+        )
+      ]);
       setPendingOwners(pending);
+      setApprovedOwners(approved);
+      setAdminOwnersTab("PENDING");
       setAdminCredentials(adminLoginForm);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshAdminOwners() {
+    const [pending, approved] = await Promise.all([
+      request("/api/admin/owners/pending", adminCredentials, {}, "Admin authentication failed. Please sign in again."),
+      request("/api/admin/owners/approved", adminCredentials, {}, "Admin authentication failed. Please sign in again.")
+    ]);
+    setPendingOwners(pending);
+    setApprovedOwners(approved);
+  }
+
+  async function handleAdminRefresh() {
+    setLoading(true);
+    setError("");
+    try {
+      await refreshAdminOwners();
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -267,12 +298,7 @@ function App() {
         { method: "PUT" },
         "Admin authentication failed. Please sign in again."
       );
-      setPendingOwners(await request(
-        "/api/admin/owners/pending",
-        adminCredentials,
-        {},
-        "Admin authentication failed. Please sign in again."
-      ));
+      await refreshAdminOwners();
       setNotice("Owner registration approved. They can now sign in.");
     } catch (requestError) {
       setError(requestError.message);
@@ -290,7 +316,7 @@ function App() {
         username: recoveryForm.username,
         whatsappNumber: recoveryForm.whatsappNumber
       });
-      setNotice("If the username and WhatsApp number match, an OTP has been sent.");
+      setNotice("If the username and mobile number match, an OTP has been sent to the registered mobile number.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -308,29 +334,6 @@ function App() {
       setLoginForm({ username: recoveryForm.username, password: "" });
       setRecoveryForm({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
       setNotice("Password changed. Sign in with your new password.");
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleChangePassword(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    setNotice("");
-    try {
-      await request("/api/owner/password/change", credentials, {
-        method: "POST",
-        body: JSON.stringify(passwordChange)
-      });
-      const updatedCredentials = { ...credentials, password: passwordChange.newPassword };
-      setCredentials(updatedCredentials);
-      setLoginForm(updatedCredentials);
-      setPasswordChange({ currentPassword: "", newPassword: "" });
-      setPasswordChangeOpen(false);
-      setNotice("Password changed successfully.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -665,39 +668,72 @@ function App() {
     if (adminCredentials) {
       return (
         <main className="login-shell">
-          <section className="login-card">
+          <section className="login-card admin-console-card">
             <a className="brand" href="/" aria-label="Haven home">
               <span className="brand-mark">H</span>
               <span>haven<span className="brand-period">.</span></span>
             </a>
             <p className="eyebrow">ADMIN PORTAL</p>
-            <h1>Owner approvals.</h1>
-            <p className="muted">Review new PG owner registrations and approve access.</p>
+            <h1>Owner management</h1>
+            <p className="muted">Review registrations and keep track of owner access across Haven.</p>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             {notice && <div className="alert alert-success" role="status">{notice}</div>}
-            {pendingOwners.length === 0 ? <p className="muted">There are no pending registrations.</p> : (
-              <div className="stack-form">
-                {pendingOwners.map((owner) => (
-                  <article className="approval-card" key={owner.id}>
-                    <strong>{owner.pgName}</strong>
-                    <span>{owner.username}</span>
-                    <span>{owner.mobileNumber}</span>
-                    <button
-                      type="button"
-                      className="button button-primary"
-                      disabled={loading}
-                      onClick={() => approveOwner(owner.id)}
-                    >
-                      Approve owner
-                    </button>
-                  </article>
-                ))}
+            <section className="admin-owner-stats" aria-label="Owner totals">
+              <article className="admin-owner-stat">
+                <span>Waiting approval</span><strong>{pendingOwners.length}</strong>
+              </article>
+              <article className="admin-owner-stat">
+                <span>Approved owners</span><strong>{approvedOwners.length}</strong>
+              </article>
+            </section>
+            <nav className="admin-owner-tabs" aria-label="Owner status">
+              <button type="button" className={adminOwnersTab === "PENDING" ? "admin-owner-tab active" : "admin-owner-tab"} aria-pressed={adminOwnersTab === "PENDING"} onClick={() => setAdminOwnersTab("PENDING")}>Waiting approval <span>{pendingOwners.length}</span></button>
+              <button type="button" className={adminOwnersTab === "APPROVED" ? "admin-owner-tab active" : "admin-owner-tab"} aria-pressed={adminOwnersTab === "APPROVED"} onClick={() => setAdminOwnersTab("APPROVED")}>Approved <span>{approvedOwners.length}</span></button>
+            </nav>
+            <div className="admin-list-heading">
+              <div>
+                <h2>{adminOwnersTab === "PENDING" ? "Waiting for approval" : "Approved owners"}</h2>
+                <p>{adminOwnersTab === "PENDING" ? "Review the PG details before granting account access." : "Owners who can currently sign in to manage their PG."}</p>
               </div>
-            )}
+              <button type="button" className="button button-light" disabled={loading} onClick={handleAdminRefresh}>{loading ? "Refreshing..." : "Refresh"}</button>
+            </div>
+            {(() => {
+              const owners = adminOwnersTab === "PENDING" ? pendingOwners : approvedOwners;
+              return owners.length === 0 ? (
+                <div className="admin-empty-state">
+                  <span className="admin-empty-mark" aria-hidden="true">{adminOwnersTab === "PENDING" ? "✓" : "—"}</span>
+                  <strong>{adminOwnersTab === "PENDING" ? "You’re all caught up" : "No approved owners yet"}</strong>
+                  <p>{adminOwnersTab === "PENDING" ? "New owner registrations will appear here for review." : "Approved PG owners will appear here."}</p>
+                </div>
+              ) : (
+                <div className="admin-owner-list">
+                  {owners.map((owner) => (
+                    <article className="admin-owner-card" key={owner.id}>
+                      <div className="admin-owner-card-main">
+                        <div className="admin-owner-avatar" aria-hidden="true">{owner.pgName.trim().charAt(0).toUpperCase()}</div>
+                        <div className="admin-owner-info">
+                          <div className="admin-owner-title">
+                            <strong>{owner.pgName}</strong>
+                            <span className={`owner-status ${adminOwnersTab === "PENDING" ? "owner-status-pending" : "owner-status-approved"}`}>{adminOwnersTab === "PENDING" ? "Pending" : "Approved"}</span>
+                          </div>
+                          <div className="admin-owner-details">
+                            <span><small>USERNAME</small>{owner.username}</span>
+                            <span><small>MOBILE NUMBER</small>{owner.mobileNumber}</span>
+                          </div>
+                        </div>
+                      </div>
+                      {adminOwnersTab === "PENDING" && <button type="button" className="button button-primary" disabled={loading} onClick={() => approveOwner(owner.id)}>Approve owner</button>}
+                    </article>
+                  ))}
+                </div>
+              );
+            })()}
             <button type="button" className="text-action" onClick={() => {
               setAdminCredentials(null);
               setAdminLoginForm({ username: "", password: "" });
               setPendingOwners([]);
+              setApprovedOwners([]);
+              setAdminOwnersTab("PENDING");
               setError("");
               setNotice("");
             }}>Admin sign out</button>
@@ -725,7 +761,7 @@ function App() {
           </a>
           <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : "OWNER PORTAL"}</p>
           <h1>{authMode === "REGISTRATION_SUCCESS" ? "Registration received." : authMode === "SETUP" ? "Create your owner account." : authMode === "FORGOT" ? "Recover your account." : authMode === "ADMIN_LOGIN" ? "Admin sign in." : "Welcome back."}</h1>
-          <p className="muted">{authMode === "REGISTRATION_SUCCESS" ? `Thank you for registering in Haven Resident Management System. ${registrationSuccessPgName} registered successfully. Please wait a few seconds for admin approval. You can sign in after approval.` : authMode === "SETUP" ? "Create your PG owner account. An administrator must approve it before you can sign in." : authMode === "FORGOT" ? "Verify your WhatsApp number to reset your password." : authMode === "ADMIN_LOGIN" ? "Sign in to review and approve owner registrations." : "Sign in to securely manage your residents."}</p>
+          <p className="muted">{authMode === "REGISTRATION_SUCCESS" ? `Thank you for registering in Haven Resident Management System. ${registrationSuccessPgName} registered successfully. Please wait a few seconds for admin approval. You can sign in after approval.` : authMode === "SETUP" ? "Create your PG owner account. An administrator must approve it before you can sign in." : authMode === "FORGOT" ? "Verify the mobile number registered to your account to reset your password." : authMode === "ADMIN_LOGIN" ? "Sign in to review and approve owner registrations." : "Sign in to securely manage your residents."}</p>
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
           {authMode === "LOGIN" && <form className="stack-form" onSubmit={handleLogin}>
@@ -768,17 +804,17 @@ function App() {
           </form>}
           {authMode === "FORGOT" && <form className="stack-form" onSubmit={handleConfirmPasswordReset}>
             <label>Username<input autoComplete="username" required value={recoveryForm.username} onChange={(event) => setRecoveryForm({ ...recoveryForm, username: event.target.value })} /></label>
-            <label>Owner WhatsApp number (India; +91 added automatically)<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={recoveryForm.whatsappNumber} onChange={(event) => setRecoveryForm({ ...recoveryForm, whatsappNumber: event.target.value })} /></label>
+            <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={recoveryForm.whatsappNumber} onChange={(event) => setRecoveryForm({ ...recoveryForm, whatsappNumber: event.target.value })} /></label>
             <button type="button" className="button button-light" disabled={loading || !recoveryForm.username || !recoveryForm.whatsappNumber} onClick={handleRequestResetOtp}>Send password reset OTP</button>
             <label>OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={recoveryForm.otp} onChange={(event) => setRecoveryForm({ ...recoveryForm, otp: event.target.value })} /></label>
-            <label>New password (at least 12 characters)<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={recoveryForm.newPassword} onChange={(event) => setRecoveryForm({ ...recoveryForm, newPassword: event.target.value })} /></label>
+            <label>New password<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={recoveryForm.newPassword} onChange={(event) => setRecoveryForm({ ...recoveryForm, newPassword: event.target.value })} /></label>
             <button className="button button-primary button-wide" disabled={loading}>Reset password</button>
           </form>}
           {authMode === "LOGIN" && <>
             <button type="button" className="text-action" onClick={() => { setAuthMode("SETUP"); setError(""); setNotice(""); }}>Register your PG</button>
             <button type="button" className="text-action" onClick={() => { setAuthMode("FORGOT"); setError(""); setNotice(""); }}>Forgot password?</button>
             <button type="button" className="text-action" onClick={() => { setAuthMode("ADMIN_LOGIN"); setError(""); setNotice(""); }}>Admin login</button>
-            <p className="login-footnote">Your password is stored as a one-way hash. Password resets use a WhatsApp OTP sent to your verified number.</p>
+            <p className="login-footnote">Your password is stored as a one-way hash. Password resets use an OTP sent to your registered mobile number.</p>
           </>}
           {authMode !== "LOGIN" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
         </section>
@@ -810,7 +846,6 @@ function App() {
         <div className="topbar-right">
           <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
           <button className="button button-light" onClick={() => setProfileOpen(true)}>PG settings</button>
-          <button className="button button-light" onClick={() => setPasswordChangeOpen(true)}>Change password</button>
           <button className="button button-light" onClick={logout}>Sign out</button>
         </div>
       </header>
@@ -881,24 +916,6 @@ function App() {
                   <div className="form-footer-actions">
                     <button type="button" className="button button-light" onClick={() => setProfileOpen(false)}>Cancel</button>
                     <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving…" : "Save PG settings"}</button>
-                  </div>
-                </form>
-              </section>
-            </div>}
-
-            {passwordChangeOpen && <div className="dialog-backdrop">
-              <section className="resident-dialog panel document-viewer" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
-                <div className="panel-heading">
-                  <div><p className="eyebrow">ACCOUNT SECURITY</p><h2 id="change-password-title">Change password</h2></div>
-                  <button className="icon-button" onClick={() => setPasswordChangeOpen(false)} aria-label="Close password form">×</button>
-                </div>
-                {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
-                <form className="stack-form password-change-form" onSubmit={handleChangePassword}>
-                  <label>Current password<SecretInput autoComplete="current-password" required value={passwordChange.currentPassword} onChange={(event) => setPasswordChange({ ...passwordChange, currentPassword: event.target.value })} /></label>
-                  <label>New password (at least 12 characters)<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={passwordChange.newPassword} onChange={(event) => setPasswordChange({ ...passwordChange, newPassword: event.target.value })} /></label>
-                  <div className="form-footer-actions">
-                    <button type="button" className="button button-light" onClick={() => setPasswordChangeOpen(false)}>Cancel</button>
-                    <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Updating…" : "Update password"}</button>
                   </div>
                 </form>
               </section>

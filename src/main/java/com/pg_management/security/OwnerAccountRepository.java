@@ -15,5 +15,7 @@ public interface OwnerAccountRepository extends JpaRepository<OwnerAccount, Long
 
 	List<OwnerAccount> findAllByApprovedFalseOrderByIdAsc();
 
+	List<OwnerAccount> findAllByApprovedTrueOrderByIdAsc();
+
 	long countByApprovedTrue();
 }

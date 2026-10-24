@@ -66,4 +66,18 @@ class AdminControllerTests {
 		mockMvc.perform(get("/api/admin/owners/pending").header("Authorization", AUTHORIZATION))
 				.andExpect(status().isOk());
 	}
+
+	@Test
+	void approvedOwnerListRequiresAdminAuthentication() throws Exception {
+		mockMvc.perform(get("/api/admin/owners/approved"))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void adminCanListApprovedOwners() throws Exception {
+		when(ownerAuthService.findApprovedOwners()).thenReturn(List.of());
+
+		mockMvc.perform(get("/api/admin/owners/approved").header("Authorization", AUTHORIZATION))
+				.andExpect(status().isOk());
+	}
 }
