@@ -129,6 +129,8 @@ function App() {
   const [authMode, setAuthMode] = useState("LOGIN");
   const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", mobileNumber: "" });
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
+  const [registrationCredentials, setRegistrationCredentials] = useState(null);
+  const [registrationApproved, setRegistrationApproved] = useState(false);
   const [recoveryForm, setRecoveryForm] = useState({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ pgName: "", whatsappNumber: "", otp: "" });
@@ -175,6 +177,45 @@ function App() {
       });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (authMode !== "REGISTRATION_SUCCESS" || !registrationCredentials || registrationApproved) return undefined;
+
+    let stopped = false;
+    let timeoutId;
+    const checkApproval = async () => {
+      try {
+        const response = await fetch(apiUrl("/api/owner/profile"), {
+          headers: {
+            Authorization: `Basic ${encodeBasicCredentials(registrationCredentials)}`
+          },
+          cache: "no-store"
+        });
+        if (stopped) return;
+        if (response.ok) {
+          setRegistrationApproved(true);
+          setError("");
+          setLoginForm({ username: registrationCredentials.username, password: "" });
+          setRegistrationCredentials(null);
+          return;
+        }
+        if (response.status === 401) {
+          setError("");
+        } else {
+          setError(`Could not check approval status (${response.status}). We’ll try again shortly.`);
+        }
+      } catch {
+        if (!stopped) setError("Could not check approval status. Check your connection; we’ll try again shortly.");
+      }
+      if (!stopped) timeoutId = window.setTimeout(checkApproval, 5000);
+    };
+
+    checkApproval();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [authMode, registrationCredentials, registrationApproved]);
 
   async function loadResidents(owner, keyword = "", status = "ALL") {
     const query = keyword.trim();
@@ -226,6 +267,8 @@ function App() {
     try {
       await publicRequest("/api/owner/setup", setupForm);
       setRegistrationSuccessPgName(setupForm.pgName.trim());
+      setRegistrationCredentials({ username: setupForm.username, password: setupForm.password });
+      setRegistrationApproved(false);
       setSetupForm({ username: "", password: "", pgName: "", mobileNumber: "" });
       setAuthMode("REGISTRATION_SUCCESS");
     } catch (requestError) {
@@ -758,8 +801,15 @@ function App() {
             <span>haven<span className="brand-period">.</span></span>
           </a>
           <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : "OWNER PORTAL"}</p>
-          <h1>{authMode === "REGISTRATION_SUCCESS" ? "Registration received." : authMode === "SETUP" ? "Create your owner account." : authMode === "FORGOT" ? "Recover your account." : authMode === "ADMIN_LOGIN" ? "Admin sign in." : "Welcome back."}</h1>
-          <p className="muted">{authMode === "REGISTRATION_SUCCESS" ? `Thank you for registering in Haven Resident Management System. ${registrationSuccessPgName} registered successfully. Please wait a few seconds for admin approval. You can sign in after approval.` : authMode === "SETUP" ? "Create your PG owner account. An administrator must approve it before you can sign in." : authMode === "FORGOT" ? "Verify the mobile number registered to your account to reset your password." : authMode === "ADMIN_LOGIN" ? "Sign in to review and approve owner registrations." : "Sign in to securely manage your residents."}</p>
+          <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your owner account." : authMode === "FORGOT" ? "Recover your account." : authMode === "ADMIN_LOGIN" ? "Admin sign in." : "Welcome back."}</h1>
+          <p className="muted">{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering in Haven Resident Management System. ${registrationSuccessPgName} registered successfully. Please wait a few seconds for admin approval.` : authMode === "SETUP" ? "Create your PG owner account. An administrator must approve it before you can sign in." : authMode === "FORGOT" ? "Verify the mobile number registered to your account to reset your password." : authMode === "ADMIN_LOGIN" ? "Sign in to review and approve owner registrations." : "Sign in to securely manage your residents."}</p>
+          {authMode === "REGISTRATION_SUCCESS" && !registrationApproved && <div className="alert alert-success" role="status">Waiting for an administrator to approve your registration. This page will update when approved.</div>}
+          {authMode === "REGISTRATION_SUCCESS" && registrationApproved && <button type="button" className="button button-primary button-wide" onClick={() => {
+            setAuthMode("LOGIN");
+            setRegistrationApproved(false);
+            setError("");
+            setNotice("");
+          }}>Go to sign in</button>}
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
           {authMode === "LOGIN" && <form className="stack-form" onSubmit={handleLogin}>
@@ -814,7 +864,7 @@ function App() {
             <button type="button" className="text-action" onClick={() => { setAuthMode("ADMIN_LOGIN"); setError(""); setNotice(""); }}>Admin login</button>
             <p className="login-footnote">Your password is stored as a one-way hash. Password resets use an OTP sent to your registered mobile number.</p>
           </>}
-          {authMode !== "LOGIN" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
+          {authMode !== "LOGIN" && authMode !== "REGISTRATION_SUCCESS" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
         </section>
         <aside className="login-aside">
           <div className="aside-orb orb-one" />

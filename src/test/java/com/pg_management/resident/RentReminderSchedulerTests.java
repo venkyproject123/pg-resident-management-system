@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,12 +34,12 @@ class RentReminderSchedulerTests {
 	private WhatsAppCloudApiClient whatsAppClient;
 
 	@Test
-	void sendsReminderOnResidentsJoiningDateInsteadOfOwnerDueDay() {
-		LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
-		YearMonth period = YearMonth.from(today);
+	void sendsReminderOneDayBeforeMonthlyJoiningDateDueDate() {
+		LocalDate today = LocalDate.of(2026, 10, 14);
+		YearMonth period = YearMonth.of(2026, 10);
 		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210");
 		Resident resident = new Resident(owner, "Resident", "Father", "9876543210", "1",
-				BigDecimal.valueOf(5000), BigDecimal.ZERO, today, "Address", "Company");
+				BigDecimal.valueOf(5000), BigDecimal.ZERO, LocalDate.of(2026, 3, 15), "Address", "Company");
 		when(ownerAccountRepository.findAll()).thenReturn(List.of(owner));
 		when(residentRepository.findByOwner_IdAndStatusOrderByRoomNumberAscNameAsc(
 				isNull(), eq(ResidentStatus.ACTIVE))).thenReturn(List.of(resident));
@@ -48,10 +47,46 @@ class RentReminderSchedulerTests {
 				resident, period.getYear(), period.getMonthValue())).thenReturn(Optional.empty());
 
 		new RentReminderScheduler(ownerAccountRepository, residentRepository, rentPaymentRepository, whatsAppClient)
-				.sendDueDateReminders();
+				.sendDueDateReminders(today);
 
 		verify(whatsAppClient).sendRentReminder("9876543210", "Sample PG", "Resident",
 				period.getMonth().toString() + " " + period.getYear(), "5000");
 		verify(rentPaymentRepository).save(any(RentPayment.class));
+	}
+
+	@Test
+	void reminderForFirstOfMonthUsesFollowingMonthPaymentPeriod() {
+		LocalDate today = LocalDate.of(2026, 10, 31);
+		YearMonth period = YearMonth.of(2026, 11);
+		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210");
+		Resident resident = new Resident(owner, "Resident", "Father", "9876543210", "1",
+				BigDecimal.valueOf(5000), BigDecimal.ZERO, LocalDate.of(2026, 3, 1), "Address", "Company");
+		when(ownerAccountRepository.findAll()).thenReturn(List.of(owner));
+		when(residentRepository.findByOwner_IdAndStatusOrderByRoomNumberAscNameAsc(
+				isNull(), eq(ResidentStatus.ACTIVE))).thenReturn(List.of(resident));
+		when(rentPaymentRepository.findByResidentAndPeriodYearAndPeriodMonth(
+				resident, period.getYear(), period.getMonthValue())).thenReturn(Optional.empty());
+
+		new RentReminderScheduler(ownerAccountRepository, residentRepository, rentPaymentRepository, whatsAppClient)
+				.sendDueDateReminders(today);
+
+		verify(whatsAppClient).sendRentReminder("9876543210", "Sample PG", "Resident", "NOVEMBER 2026", "5000");
+		verify(rentPaymentRepository).save(any(RentPayment.class));
+	}
+
+	@Test
+	void doesNotSendReminderOnDueDate() {
+		LocalDate today = LocalDate.of(2026, 10, 15);
+		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210");
+		Resident resident = new Resident(owner, "Resident", "Father", "9876543210", "1",
+				BigDecimal.valueOf(5000), BigDecimal.ZERO, LocalDate.of(2026, 3, 15), "Address", "Company");
+		when(ownerAccountRepository.findAll()).thenReturn(List.of(owner));
+		when(residentRepository.findByOwner_IdAndStatusOrderByRoomNumberAscNameAsc(
+				isNull(), eq(ResidentStatus.ACTIVE))).thenReturn(List.of(resident));
+
+		new RentReminderScheduler(ownerAccountRepository, residentRepository, rentPaymentRepository, whatsAppClient)
+				.sendDueDateReminders(today);
+
+		org.mockito.Mockito.verifyNoInteractions(whatsAppClient, rentPaymentRepository);
 	}
 }

@@ -42,12 +42,17 @@ public class RentReminderScheduler {
 	@Transactional
 	public void sendDueDateReminders() {
 		LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
-		YearMonth period = YearMonth.from(today);
+		sendDueDateReminders(today);
+	}
+
+	void sendDueDateReminders(LocalDate today) {
+		YearMonth period = YearMonth.from(today.plusDays(1));
 		for (OwnerAccount owner : ownerAccountRepository.findAll()) {
 			for (Resident resident : residentRepository.findByOwner_IdAndStatusOrderByRoomNumberAscNameAsc(
 					owner.getId(), ResidentStatus.ACTIVE)) {
 				int dueDay = Math.min(resident.getJoiningDate().getDayOfMonth(), period.lengthOfMonth());
-				if (today.isBefore(resident.getJoiningDate()) || today.getDayOfMonth() != dueDay) {
+				LocalDate dueDate = period.atDay(dueDay);
+				if (today.isBefore(resident.getJoiningDate()) || !today.equals(dueDate.minusDays(1))) {
 					continue;
 				}
 				sendReminderIfUnpaid(owner, resident, period);
