@@ -13,6 +13,8 @@ public interface ResidentRepository extends JpaRepository<Resident, Long> {
 
 	List<Resident> findAllByOwner_IdOrderByRoomNumberAscNameAsc(Long ownerId);
 
+	List<Resident> findAllByOwner_IdAndRoomNumberIgnoreCase(Long ownerId, String roomNumber);
+
 	java.util.Optional<Resident> findByIdAndOwner_Id(Long id, Long ownerId);
 
 	@Query("""

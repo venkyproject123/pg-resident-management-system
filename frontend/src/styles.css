@@ -14,7 +14,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 360px; min-height: 100vh; }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { opacity: .62; cursor: wait; }
 a { color: inherit; text-decoration: none; }
@@ -81,8 +81,9 @@ a { color: inherit; text-decoration: none; }
 .approval-card { display: grid; gap: 8px; padding: 16px; border: 1px solid #e1e8e3; border-radius: 12px; background: #fff; }
 .approval-card > span { color: #68766d; font-size: 13px; }
 label { display: grid; gap: 7px; color: #4e5b53; font-size: 11px; font-weight: 700; }
-input, textarea { width: 100%; min-width: 0; border: 1px solid #e4e9e4; border-radius: 8px; outline: 0; background: #fff; color: #25332b; font-size: 12px; transition: border-color .15s, box-shadow .15s; }
+input, textarea, select { width: 100%; min-width: 0; border: 1px solid #e4e9e4; border-radius: 8px; outline: 0; background: #fff; color: #25332b; font-size: 12px; transition: border-color .15s, box-shadow .15s; }
 input { height: 41px; padding: 0 11px; }
+select { height: 41px; padding: 0 11px; }
 .secret-input-wrap { position: relative; display: block; width: 100%; }
 .secret-input-wrap input { padding-right: 42px; }
 .secret-visibility-toggle { position: absolute; top: 50%; right: 5px; display: grid; width: 32px; height: 32px; padding: 7px; transform: translateY(-50%); place-items: center; border: 0; border-radius: 6px; background: transparent; color: #718077; }
@@ -90,7 +91,7 @@ input { height: 41px; padding: 0 11px; }
 .secret-visibility-toggle:focus-visible { outline: 2px solid #78a88c; outline-offset: 1px; }
 .secret-visibility-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 textarea { resize: vertical; min-height: 58px; padding: 10px 11px; line-height: 1.5; }
-input:focus, textarea:focus { border-color: #78a88c; box-shadow: 0 0 0 3px #276b4d13; }
+input:focus, textarea:focus, select:focus { border-color: #78a88c; box-shadow: 0 0 0 3px #276b4d13; }
 .login-footnote { margin: 22px 0 0; color: #8b948e; text-align: center; font-size: 10px; }
 .login-aside { position: relative; display: grid; overflow: hidden; place-items: center; min-height: 100vh; background: #164e39; color: #fff; }
 .login-aside::before { position: absolute; inset: 0; background: radial-gradient(ellipse at 28% 78%, #2f815b 0, transparent 50%), linear-gradient(135deg, #164e39, #103c2d); content: ""; }
@@ -128,6 +129,23 @@ input:focus, textarea:focus { border-color: #78a88c; box-shadow: 0 0 0 3px #276b
 .stat-card strong { font: 700 21px "Segoe UI", Arial, sans-serif; }
 .stat-caption { margin-left: auto; color: #9aa39d; font-size: 10px; }
 .workspace { display: block; }
+.session-loading { display: grid; min-height: 100vh; place-items: center; padding: 24px; color: #536158; font-size: 16px; font-weight: 600; }
+.room-availability { margin: 0 0 20px; padding: 18px 20px; }
+.room-availability-heading h2 { margin: 0; color: #344239; font-size: 19px; }
+.room-availability-heading .muted { margin: 6px 0 0; font-size: 14px; line-height: 1.5; }
+.room-availability-filters { display: flex; align-items: end; gap: 18px; margin: 16px 0; }
+.room-search { flex: 1; max-width: 360px; }
+.availability-toggle { display: flex; min-height: 48px; align-items: center; gap: 9px; }
+.availability-toggle input { width: 20px; height: 20px; margin: 0; accent-color: var(--green); }
+.room-availability-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.room-availability-card { padding: 13px 15px; border: 1px solid #e4eae4; border-radius: 11px; background: #fafbf9; }
+.room-availability-card.room-has-vacancy { border-color: #cde2d2; background: #f5faf6; }
+.room-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.room-card-heading strong { color: #344239; font-size: 15px; }
+.room-card-heading span { color: #65816d; font-size: 12px; font-weight: 700; text-align: right; }
+.room-has-vacancy .room-card-heading span { color: #28734c; }
+.room-availability-card p { margin: 8px 0 0; color: #78857c; font-size: 13px; }
+.room-availability-empty { margin: 0; padding: 16px; border-radius: 9px; background: #f8faf7; color: #6d7b71; font-size: 14px; line-height: 1.5; }
 .panel { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 3px 14px #26362906; }
 .resident-panel { min-width: 0; overflow: hidden; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 20px 20px 17px; }
@@ -239,6 +257,7 @@ body { min-width: 320px; }
 label { gap: 9px; font-size: 14px; }
 input, textarea { font-size: 16px; }
 input { height: 48px; padding: 0 13px; }
+select { height: 48px; padding: 0 13px; font-size: 16px; }
 .stack-form { gap: 21px; }
 .alert { padding: 14px 16px; font-size: 15px; line-height: 1.5; }
 .field-help { color: #6d7b71; font-size: 13px; font-weight: 500; line-height: 1.45; }
@@ -341,6 +360,15 @@ td { font-size: 13px; }
   .stat-icon { flex-basis: 34px; width: 34px; height: 34px; font-size: 16px; }
   .stat-label { font-size: 12px; line-height: 1.35; }
   .stat-card strong { font-size: 24px; }
+  .room-availability { margin-bottom: 15px; padding: 15px; }
+  .room-availability-filters { align-items: stretch; flex-direction: column; gap: 8px; margin: 13px 0; }
+  .room-search { max-width: none; }
+  .availability-toggle { min-height: 42px; font-size: 14px; }
+  .room-availability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .room-availability-card { padding: 11px; }
+  .room-card-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .room-card-heading span { text-align: left; }
+  .room-availability-card p { font-size: 12px; }
   .panel-heading { align-items: stretch; flex-direction: column; gap: 13px; padding: 17px 15px; }
   .panel-heading h2 { font-size: 18px; }
   .directory-actions, .search-form { width: 100%; }

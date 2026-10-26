@@ -40,6 +40,9 @@ public class Resident {
 	@Column(name = "room_number", nullable = false, length = 30)
 	private String roomNumber;
 
+	@Column(name = "sharing_capacity")
+	private Integer sharing;
+
 	@Column(nullable = false, precision = 10, scale = 2)
 	private BigDecimal rent;
 
@@ -73,12 +76,22 @@ public class Resident {
 
 	public Resident(String name, String fatherName, String mobileNumber, String roomNumber, BigDecimal rent, BigDecimal advanceAmount,
 			LocalDate joiningDate, String permanentAddress, String companyAddress) {
-		updateDetails(name, fatherName, mobileNumber, roomNumber, rent, advanceAmount, joiningDate, permanentAddress, companyAddress);
+		this(name, fatherName, mobileNumber, roomNumber, null, rent, advanceAmount, joiningDate, permanentAddress, companyAddress);
+	}
+
+	public Resident(String name, String fatherName, String mobileNumber, String roomNumber, Integer sharing, BigDecimal rent,
+			BigDecimal advanceAmount, LocalDate joiningDate, String permanentAddress, String companyAddress) {
+		updateDetails(name, fatherName, mobileNumber, roomNumber, sharing, rent, advanceAmount, joiningDate, permanentAddress, companyAddress);
 	}
 
 	public Resident(OwnerAccount owner, String name, String fatherName, String mobileNumber, String roomNumber, BigDecimal rent,
 			BigDecimal advanceAmount, LocalDate joiningDate, String permanentAddress, String companyAddress) {
-		this(name, fatherName, mobileNumber, roomNumber, rent, advanceAmount, joiningDate, permanentAddress, companyAddress);
+		this(owner, name, fatherName, mobileNumber, roomNumber, null, rent, advanceAmount, joiningDate, permanentAddress, companyAddress);
+	}
+
+	public Resident(OwnerAccount owner, String name, String fatherName, String mobileNumber, String roomNumber, Integer sharing, BigDecimal rent,
+			BigDecimal advanceAmount, LocalDate joiningDate, String permanentAddress, String companyAddress) {
+		this(name, fatherName, mobileNumber, roomNumber, sharing, rent, advanceAmount, joiningDate, permanentAddress, companyAddress);
 		this.owner = owner;
 	}
 
@@ -88,10 +101,16 @@ public class Resident {
 
 	public void updateDetails(String name, String fatherName, String mobileNumber, String roomNumber, BigDecimal rent,
 			BigDecimal advanceAmount, LocalDate joiningDate, String permanentAddress, String companyAddress) {
+		updateDetails(name, fatherName, mobileNumber, roomNumber, sharing, rent, advanceAmount, joiningDate, permanentAddress, companyAddress);
+	}
+
+	public void updateDetails(String name, String fatherName, String mobileNumber, String roomNumber, Integer sharing,
+			BigDecimal rent, BigDecimal advanceAmount, LocalDate joiningDate, String permanentAddress, String companyAddress) {
 		this.name = name;
 		this.fatherName = fatherName;
 		this.mobileNumber = mobileNumber;
 		this.roomNumber = roomNumber;
+		this.sharing = sharing;
 		this.rent = rent;
 		this.advanceAmount = advanceAmount;
 		this.joiningDate = joiningDate;
@@ -132,6 +151,10 @@ public class Resident {
 
 	public String getRoomNumber() {
 		return roomNumber;
+	}
+
+	public Integer getSharing() {
+		return sharing;
 	}
 
 	public BigDecimal getRent() {

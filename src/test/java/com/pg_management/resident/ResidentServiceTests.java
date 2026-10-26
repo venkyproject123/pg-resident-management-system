@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.pg_management.resident.dto.UpdateResidentRequest;
+import com.pg_management.resident.dto.CreateResidentRequest;
 import com.pg_management.resident.storage.PrivateDocumentStorageService;
 import com.pg_management.security.OwnerAccount;
 import org.springframework.web.server.ResponseStatusException;
@@ -56,6 +57,7 @@ class ResidentServiceTests {
 				"Updated Father",
 				"+919876543210",
 				"B-202",
+				3,
 				new BigDecimal("15000.00"),
 				new BigDecimal("30000.00"),
 				LocalDate.of(2026, 10, 5),
@@ -66,7 +68,51 @@ class ResidentServiceTests {
 
 		assertEquals("Updated Resident", response.name());
 		assertEquals("B-202", response.roomNumber());
+		assertEquals(3, response.sharing());
 		assertEquals(new BigDecimal("15000.00"), response.rent());
+	}
+
+	@Test
+	void createRejectsSharingCapacityThatConflictsWithRoom() {
+		Resident currentRoomResident = new Resident(
+				owner, "Existing Resident", "Father", "+919876543210", "101", 2,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
+				"Address", "Company");
+		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(3L, "101"))
+				.thenReturn(List.of(currentRoomResident));
+		CreateResidentRequest request = new CreateResidentRequest(
+				"New Resident", "Father", "+919876543211", "101", 3,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
+				"Address", "Company");
+
+		ResponseStatusException exception = assertThrows(
+				ResponseStatusException.class, () -> residentService.create(request, owner));
+
+		assertEquals("All residents in a room must use the same sharing capacity", exception.getReason());
+		verify(residentRepository, never()).save(org.mockito.ArgumentMatchers.any(Resident.class));
+	}
+
+	@Test
+	void createRejectsMoreActiveResidentsThanRoomCapacity() {
+		Resident firstResident = new Resident(
+				owner, "First Resident", "Father", "+919876543210", "101", 2,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
+				"Address", "Company");
+		Resident secondResident = new Resident(
+				owner, "Second Resident", "Father", "+919876543211", "101", 2,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
+				"Address", "Company");
+		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(3L, "101"))
+				.thenReturn(List.of(firstResident, secondResident));
+		CreateResidentRequest request = new CreateResidentRequest(
+				"Third Resident", "Father", "+919876543212", "101", 2,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
+				"Address", "Company");
+
+		ResponseStatusException exception = assertThrows(
+				ResponseStatusException.class, () -> residentService.create(request, owner));
+
+		assertEquals("This room is already full for the selected sharing capacity", exception.getReason());
 	}
 
 	@Test

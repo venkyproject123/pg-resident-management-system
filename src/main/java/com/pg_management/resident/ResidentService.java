@@ -42,12 +42,15 @@ public class ResidentService {
 	}
 
 	public ResidentResponse create(CreateResidentRequest request, OwnerAccount owner) {
+		String roomNumber = request.roomNumber().trim();
+		validateRoomCapacity(owner, roomNumber, request.sharing(), null, true);
 		Resident resident = new Resident(
 				owner,
 				request.name(),
 				request.fatherName(),
 				request.mobileNumber(),
-				request.roomNumber(),
+				roomNumber,
+				request.sharing(),
 				request.rent(),
 				request.advanceAmount(),
 				request.joiningDate(),
@@ -110,17 +113,46 @@ public class ResidentService {
 
 	public ResidentResponse update(OwnerAccount owner, Long id, UpdateResidentRequest request) {
 		Resident resident = getResident(owner, id);
+		String roomNumber = request.roomNumber().trim();
+		validateRoomCapacity(owner, roomNumber, request.sharing(), id, resident.getStatus() == ResidentStatus.ACTIVE);
 		resident.updateDetails(
 				request.name(),
 				request.fatherName(),
 				request.mobileNumber(),
-				request.roomNumber(),
+				roomNumber,
+				request.sharing(),
 				request.rent(),
 				request.advanceAmount(),
 				request.joiningDate(),
 				request.permanentAddress(),
 				request.companyAddress());
 		return ResidentResponse.from(residentRepository.save(resident));
+	}
+
+	private void validateRoomCapacity(
+			OwnerAccount owner, String roomNumber, Integer sharing, Long currentResidentId, boolean currentlyActive) {
+		List<Resident> roomResidents = residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(
+				owner.getId(), roomNumber);
+		long activeResidents = 0;
+		for (Resident roomResident : roomResidents) {
+			if (roomResident.getId() != null && roomResident.getId().equals(currentResidentId)) {
+				continue;
+			}
+			if (roomResident.getSharing() != null && !roomResident.getSharing().equals(sharing)) {
+				throw new ResponseStatusException(
+						HttpStatus.CONFLICT, "All residents in a room must use the same sharing capacity");
+			}
+			if (roomResident.getStatus() == ResidentStatus.ACTIVE) {
+				activeResidents++;
+			}
+		}
+		if (currentlyActive) {
+			activeResidents++;
+		}
+		if (activeResidents > sharing) {
+			throw new ResponseStatusException(
+					HttpStatus.CONFLICT, "This room is already full for the selected sharing capacity");
+		}
 	}
 
 	public void markVacated(OwnerAccount owner, Long id) {

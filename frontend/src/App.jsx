@@ -8,6 +8,7 @@ const emptyForm = {
   fatherName: "",
   mobileNumber: "",
   roomNumber: "",
+  sharing: "",
   rent: "",
   advanceAmount: "",
   joiningDate: "",
@@ -68,12 +69,18 @@ async function request(
       detail = "";
     }
     if (response.status === 401) {
-      throw new Error(unauthorizedMessage);
+      const authenticationError = new Error(unauthorizedMessage);
+      authenticationError.status = response.status;
+      throw authenticationError;
     }
     if (response.status === 404) {
-      throw new Error("That resident could not be found.");
+      const notFoundError = new Error("That resident could not be found.");
+      notFoundError.status = response.status;
+      throw notFoundError;
     }
-    throw new Error(detail || `Request failed (${response.status}). Check the submitted values and try again.`);
+    const requestError = new Error(detail || `Request failed (${response.status}). Check the submitted values and try again.`);
+    requestError.status = response.status;
+    throw requestError;
   }
 
   if (response.status === 204) return null;
@@ -107,6 +114,7 @@ function residentToForm(resident) {
     fatherName: resident.fatherName,
     mobileNumber: resident.mobileNumber,
     roomNumber: resident.roomNumber,
+    sharing: resident.sharing ? String(resident.sharing) : "",
     rent: String(resident.rent),
     advanceAmount: String(resident.advanceAmount),
     joiningDate: resident.joiningDate,
@@ -119,10 +127,35 @@ function phoneForForm(number = "") {
   return number.startsWith("+91") ? number.slice(3) : number;
 }
 
+function sharingLabel(sharing) {
+  return sharing === 1 ? "Single sharing" : `${sharing} sharing`;
+}
+
+function readSavedSession() {
+  try {
+    const value = sessionStorage.getItem("haven-auth-session");
+    if (!value) return null;
+    const session = JSON.parse(value);
+    if ((session.type === "owner" || session.type === "admin")
+      && typeof session.credentials?.username === "string"
+      && typeof session.credentials?.password === "string") {
+      return session;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function App() {
-  const [credentials, setCredentials] = useState(null);
+  const [savedSession] = useState(readSavedSession);
+  const [credentials, setCredentials] = useState(
+    savedSession?.type === "owner" ? savedSession.credentials : null
+  );
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
-  const [adminCredentials, setAdminCredentials] = useState(null);
+  const [adminCredentials, setAdminCredentials] = useState(
+    savedSession?.type === "admin" ? savedSession.credentials : null
+  );
   const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
   const [pendingOwners, setPendingOwners] = useState([]);
   const [approvedOwners, setApprovedOwners] = useState([]);
@@ -135,8 +168,11 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ pgName: "", location: "", whatsappNumber: "", otp: "" });
   const [residents, setResidents] = useState([]);
+  const [allResidents, setAllResidents] = useState([]);
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
+  const [roomSearchText, setRoomSearchText] = useState("");
+  const [onlyAvailableRooms, setOnlyAvailableRooms] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -144,6 +180,7 @@ function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authRestoring, setAuthRestoring] = useState(Boolean(savedSession));
   const [photoFile, setPhotoFile] = useState(null);
   const [identityProofFile, setIdentityProofFile] = useState(null);
   const [documentPreview, setDocumentPreview] = useState(null);
@@ -162,6 +199,49 @@ function App() {
   }, [documentPreview]);
 
   useEffect(() => {
+    if (savedSession) {
+      let mounted = true;
+      setLoading(true);
+      const restoreSession = async () => {
+        try {
+          if (savedSession.type === "owner") {
+            const [, profile] = await Promise.all([
+              loadResidents(savedSession.credentials),
+              request("/api/owner/profile", savedSession.credentials)
+            ]);
+            if (!mounted) return;
+            setProfileForm({ ...profile, whatsappNumber: phoneForForm(profile.whatsappNumber || ""), otp: "" });
+          } else {
+            const [pending, approved] = await Promise.all([
+              request("/api/admin/owners/pending", savedSession.credentials, {}, "Admin authentication failed. Please sign in again."),
+              request("/api/admin/owners/approved", savedSession.credentials, {}, "Admin authentication failed. Please sign in again.")
+            ]);
+            if (!mounted) return;
+            setPendingOwners(pending);
+            setApprovedOwners(approved);
+          }
+        } catch (requestError) {
+          if (requestError.status === 401 || requestError.status === 403) {
+            sessionStorage.removeItem("haven-auth-session");
+          }
+          if (mounted) {
+            setCredentials(null);
+            setAdminCredentials(null);
+            setError(requestError.status === 401 || requestError.status === 403
+              ? "Your session expired. Please sign in again."
+              : `Could not restore your session. Check your connection and sign in again. ${requestError.message}`);
+          }
+        } finally {
+          if (mounted) {
+            setLoading(false);
+            setAuthRestoring(false);
+          }
+        }
+      };
+      restoreSession();
+      return () => { mounted = false; };
+    }
+
     let mounted = true;
     fetch(apiUrl("/api/owner/setup-status"))
       .then(async (response) => {
@@ -219,6 +299,7 @@ function App() {
 
   async function loadResidents(owner, keyword = "", status = "ALL") {
     const allResidents = await request(`${RESIDENTS_API}/all`, owner);
+    setAllResidents(allResidents);
     const query = keyword.trim().toLocaleLowerCase();
     const data = allResidents.filter((resident) => {
       const matchesStatus = status === "ALL" || resident.status === status;
@@ -247,6 +328,7 @@ function App() {
         request("/api/owner/profile", loginForm)
       ]);
       setProfileForm({ ...profile, whatsappNumber: phoneForForm(profile.whatsappNumber || ""), otp: "" });
+      sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "owner", credentials: loginForm }));
       setCredentials(loginForm);
       setNotice("");
     } catch (requestError) {
@@ -300,6 +382,7 @@ function App() {
       ]);
       setPendingOwners(pending);
       setApprovedOwners(approved);
+      sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "admin", credentials: adminLoginForm }));
       setAdminCredentials(adminLoginForm);
     } catch (requestError) {
       setError(requestError.message);
@@ -416,6 +499,7 @@ function App() {
       });
       setProfileForm({ ...profileForm, otp: "" });
       const updatedCredentials = { ...credentials, username: profileForm.username.trim() };
+      sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "owner", credentials: updatedCredentials }));
       setCredentials(updatedCredentials);
       setLoginForm(updatedCredentials);
       setProfileOpen(false);
@@ -428,7 +512,9 @@ function App() {
   }
 
   function logout() {
+    sessionStorage.removeItem("haven-auth-session");
     setCredentials(null);
+    setAllResidents([]);
     setLoginForm({ username: "", password: "" });
     setResidents([]);
     setResidentTotals({ active: 0, vacated: 0 });
@@ -511,6 +597,7 @@ function App() {
     setNotice("");
     const payload = {
       ...form,
+      sharing: Number(form.sharing),
       rent: Number(form.rent),
       advanceAmount: Number(form.advanceAmount)
     };
@@ -715,6 +802,10 @@ function App() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  if (authRestoring) {
+    return <main className="session-loading" role="status">Restoring your secure session…</main>;
+  }
+
   if (!credentials) {
     if (adminCredentials) {
       return (
@@ -725,6 +816,7 @@ function App() {
               <span>haven<span className="brand-period">.</span></span>
             </a>
             <button type="button" className="button button-light" onClick={() => {
+              sessionStorage.removeItem("haven-auth-session");
               setAdminCredentials(null);
               setAdminLoginForm({ username: "", password: "" });
               setPendingOwners([]);
@@ -891,6 +983,28 @@ function App() {
 
   const editingResident = residents.find((resident) => resident.id === editingId) || null;
   const totalMembers = residentTotals.active + residentTotals.vacated;
+  const roomGroups = new Map();
+  allResidents.forEach((resident) => {
+    const key = resident.roomNumber.trim().toLocaleLowerCase();
+    if (!roomGroups.has(key)) roomGroups.set(key, []);
+    roomGroups.get(key).push(resident);
+  });
+  const roomAvailability = Array.from(roomGroups.values())
+    .map((roomResidents) => {
+      const capacity = roomResidents.find((resident) => Number.isInteger(resident.sharing))?.sharing;
+      if (!capacity) return null;
+      const occupied = roomResidents.filter((resident) => resident.status === "ACTIVE").length;
+      return {
+        roomNumber: roomResidents[0].roomNumber,
+        capacity,
+        occupied,
+        vacant: Math.max(capacity - occupied, 0)
+      };
+    })
+    .filter((room) => room !== null)
+    .filter((room) => room.roomNumber.toLocaleLowerCase().includes(roomSearchText.trim().toLocaleLowerCase()))
+    .filter((room) => !onlyAvailableRooms || room.vacant > 0)
+    .sort((first, second) => first.roomNumber.localeCompare(second.roomNumber, undefined, { numeric: true }));
 
   return (
     <main className="dashboard">
@@ -932,6 +1046,47 @@ function App() {
             <span className="stat-icon icon-vacated">↗</span>
             <div><p className="stat-label">Total vacated members</p><strong>{residentTotals.vacated}</strong></div>
           </button>
+        </section>
+
+        <section className="room-availability panel" aria-labelledby="room-availability-title">
+          <div className="room-availability-heading">
+            <div>
+              <p className="eyebrow">ROOMS</p>
+              <h2 id="room-availability-title">Available beds</h2>
+              <p className="muted">Capacity is calculated from each room’s sharing size and active residents.</p>
+            </div>
+          </div>
+          <div className="room-availability-filters">
+            <label className="room-search">
+              Search by room number
+              <input value={roomSearchText} onChange={(event) => setRoomSearchText(event.target.value)} placeholder="e.g. 101" />
+            </label>
+            <label className="availability-toggle">
+              <input type="checkbox" checked={onlyAvailableRooms} onChange={(event) => setOnlyAvailableRooms(event.target.checked)} />
+              Show rooms with empty beds only
+            </label>
+          </div>
+          {roomAvailability.length === 0 ? (
+            <p className="room-availability-empty">
+              {allResidents.length === 0
+                ? "Add residents and their room sharing size to track available beds."
+                : allResidents.some((resident) => Number.isInteger(resident.sharing))
+                  ? "No rooms match this search. Try another room number or show all rooms."
+                  : "Set a sharing size (1–4) while adding or editing a resident to see room availability."}
+            </p>
+          ) : (
+            <div className="room-availability-grid">
+              {roomAvailability.map((room) => (
+                <article className={`room-availability-card${room.vacant > 0 ? " room-has-vacancy" : ""}`} key={room.roomNumber.toLocaleLowerCase()}>
+                  <div className="room-card-heading">
+                    <strong>Room {room.roomNumber}</strong>
+                    <span>{room.vacant > 0 ? `${room.vacant} bed${room.vacant === 1 ? "" : "s"} available` : "Full"}</span>
+                  </div>
+                  <p>{room.occupied} of {room.capacity} beds occupied</p>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="workspace">
@@ -991,7 +1146,7 @@ function App() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>RESIDENT</th><th>MOBILE</th><th>ROOM</th><th>RENT / MONTH</th><th>JOINED</th><th>STATUS</th><th>VACATED DATE</th><th>RESIDENT DETAILS</th><th><span className="sr-only">Actions</span></th></tr>
+                    <tr><th>RESIDENT</th><th>MOBILE</th><th>ROOM / SHARING</th><th>RENT / MONTH</th><th>JOINED</th><th>STATUS</th><th>VACATED DATE</th><th>RESIDENT DETAILS</th><th><span className="sr-only">Actions</span></th></tr>
                   </thead>
                   <tbody>
                     {residents.map((resident) => (
@@ -1003,7 +1158,7 @@ function App() {
                           </div>
                         </td>
                         <td data-label="Mobile">{resident.mobileNumber || "—"}</td>
-                        <td data-label="Room"><span className="room-tag">{resident.roomNumber}</span></td>
+                        <td data-label="Room / sharing"><span className="room-tag">{resident.roomNumber} · {resident.sharing ? sharingLabel(resident.sharing) : "sharing not set"}</span></td>
                         <td data-label="Rent / month" className="rent-cell">₹{Number(resident.rent).toLocaleString("en-IN")}</td>
                         <td data-label="Joined">{resident.joiningDate}</td>
                         <td data-label="Status"><span className={`status-badge ${resident.status === "ACTIVE" ? "status-active" : "status-vacated"}`}><span />{resident.status === "ACTIVE" ? "Active" : "Vacated"}</span></td>
@@ -1124,9 +1279,18 @@ function App() {
                     <label>Full name<input name="name" maxLength="100" required value={form.name} onChange={updateForm} /></label>
                     <label>Father’s name<input name="fatherName" maxLength="100" required value={form.fatherName} onChange={updateForm} /></label>
                   </div>
+                  <label>Mobile number<input type="tel" name="mobileNumber" maxLength="20" required value={form.mobileNumber} onChange={updateForm} /></label>
                   <div className="form-row">
-                    <label>Mobile number<input type="tel" name="mobileNumber" maxLength="20" required value={form.mobileNumber} onChange={updateForm} /></label>
                     <label>Room number<input name="roomNumber" maxLength="30" required value={form.roomNumber} onChange={updateForm} /></label>
+                    <label>Sharing size
+                      <select name="sharing" required value={form.sharing} onChange={updateForm}>
+                        <option value="">Select sharing</option>
+                        <option value="1">Single sharing</option>
+                        <option value="2">2 sharing</option>
+                        <option value="3">3 sharing</option>
+                        <option value="4">4 sharing</option>
+                      </select>
+                    </label>
                   </div>
                   <label>Joining date<input type="date" name="joiningDate" required value={form.joiningDate} onChange={updateForm} /></label>
                   <div className="form-row">

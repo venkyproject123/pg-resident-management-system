@@ -97,6 +97,7 @@ class ResidentControllerTests {
 								  "fatherName": "Sample Father",
 								  "mobileNumber": "+919876543210",
 								  "roomNumber": "A-101",
+								  "sharing": 2,
 								  "rent": 12000.00,
 								  "advanceAmount": 24000.00,
 								  "joiningDate": "2026-10-01",
@@ -106,7 +107,29 @@ class ResidentControllerTests {
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(header().string("Location", "/api/residents/7"))
-				.andExpect(jsonPath("$.status").value("ACTIVE"));
+				.andExpect(jsonPath("$.status").value("ACTIVE"))
+				.andExpect(jsonPath("$.sharing").value(2));
+	}
+
+	@Test
+	void createResidentRequiresSharingCapacity() throws Exception {
+		mockMvc.perform(post("/api/residents/post")
+						.header("Authorization", AUTHORIZATION)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Sample Resident",
+								  "fatherName": "Sample Father",
+								  "mobileNumber": "+919876543210",
+								  "roomNumber": "A-101",
+								  "rent": 12000.00,
+								  "advanceAmount": 24000.00,
+								  "joiningDate": "2026-10-01",
+								  "permanentAddress": "Sample permanent address",
+								  "companyAddress": "Sample company address"
+								}
+								"""))
+				.andExpect(status().isBadRequest());
 	}
 
 	@Test
@@ -173,6 +196,7 @@ class ResidentControllerTests {
 								  "fatherName": "Sample Father",
 								  "mobileNumber": "+919876543210",
 								  "roomNumber": "A-101",
+								  "sharing": 2,
 								  "rent": 12000.00,
 								  "advanceAmount": 24000.00,
 								  "joiningDate": "2026-10-01",
@@ -247,6 +271,7 @@ class ResidentControllerTests {
 				"Sample Father",
 				"+919876543210",
 				"A-101",
+				2,
 				new BigDecimal("12000.00"),
 				new BigDecimal("24000.00"),
 				LocalDate.of(2026, 10, 1),
