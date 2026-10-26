@@ -40,6 +40,8 @@ public class RentPaymentService {
 		Resident resident = getResident(owner, residentId);
 		return rentPaymentRepository.findAllByResidentAndPeriodYearOrderByPeriodMonthAsc(resident, year)
 				.stream()
+				.filter(payment -> !LocalDate.of(year, payment.getPeriodMonth(), 1)
+						.isBefore(resident.getJoiningDate().withDayOfMonth(1)))
 				.map(RentPaymentResponse::from)
 				.toList();
 	}
@@ -51,6 +53,10 @@ public class RentPaymentService {
 			int month,
 			RentPaymentRequest request) {
 		Resident resident = getResident(owner, residentId);
+		if (LocalDate.of(year, month, 1).isBefore(resident.getJoiningDate().withDayOfMonth(1))) {
+			throw new ResponseStatusException(
+					HttpStatus.BAD_REQUEST, "Rent cannot be recorded before the resident's joining month");
+		}
 		RentPayment payment = rentPaymentRepository.findByResidentAndPeriodYearAndPeriodMonth(resident, year, month)
 				.orElseGet(() -> new RentPayment(resident, year, month));
 		boolean wasAlreadyPaid = payment.isPaid();

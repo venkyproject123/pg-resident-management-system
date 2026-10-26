@@ -126,7 +126,6 @@ function App() {
   const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
   const [pendingOwners, setPendingOwners] = useState([]);
   const [approvedOwners, setApprovedOwners] = useState([]);
-  const [adminOwnersTab, setAdminOwnersTab] = useState("PENDING");
   const [authMode, setAuthMode] = useState("LOGIN");
   const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", mobileNumber: "" });
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
@@ -257,7 +256,6 @@ function App() {
       ]);
       setPendingOwners(pending);
       setApprovedOwners(approved);
-      setAdminOwnersTab("PENDING");
       setAdminCredentials(adminLoginForm);
     } catch (requestError) {
       setError(requestError.message);
@@ -350,7 +348,7 @@ function App() {
         method: "POST",
         body: JSON.stringify({ whatsappNumber: profileForm.whatsappNumber })
       });
-      setNotice("WhatsApp OTP sent to the owner number. It expires in 5 minutes.");
+      setNotice("Verification OTP sent to the mobile number entered above. It expires in 5 minutes.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -369,8 +367,11 @@ function App() {
         body: JSON.stringify(profileForm)
       });
       setProfileForm({ ...profileForm, otp: "" });
+      const updatedCredentials = { ...credentials, username: profileForm.username.trim() };
+      setCredentials(updatedCredentials);
+      setLoginForm(updatedCredentials);
       setProfileOpen(false);
-      setNotice("PG details and verified WhatsApp number updated.");
+      setNotice("Username, PG name, and verified mobile number updated.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -575,16 +576,18 @@ function App() {
     }
   }
 
-  async function openRentPayments(resident, year = rentPaymentYear) {
+  async function openRentPayments(resident, year = null) {
+    const joiningYear = Number(resident.joiningDate.slice(0, 4));
+    const requestedYear = year ?? Math.max(new Date().getFullYear(), joiningYear);
     setLoading(true);
     setError("");
     setNotice("");
     try {
       const payments = await request(
-        `${RESIDENTS_API}/${resident.id}/rent-payments?year=${year}`,
+        `${RESIDENTS_API}/${resident.id}/rent-payments?year=${requestedYear}`,
         credentials);
       setRentPaymentResident(resident);
-      setRentPaymentYear(year);
+      setRentPaymentYear(requestedYear);
       setRentPayments(payments);
       setPaymentDraft(null);
     } catch (requestError) {
@@ -678,62 +681,57 @@ function App() {
             <p className="muted">Review registrations and keep track of owner access across Haven.</p>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             {notice && <div className="alert alert-success" role="status">{notice}</div>}
-            <section className="admin-owner-stats" aria-label="Owner totals">
-              <article className="admin-owner-stat">
-                <span>Waiting approval</span><strong>{pendingOwners.length}</strong>
-              </article>
-              <article className="admin-owner-stat">
-                <span>Approved owners</span><strong>{approvedOwners.length}</strong>
-              </article>
-            </section>
-            <nav className="admin-owner-tabs" aria-label="Owner status">
-              <button type="button" className={adminOwnersTab === "PENDING" ? "admin-owner-tab active" : "admin-owner-tab"} aria-pressed={adminOwnersTab === "PENDING"} onClick={() => setAdminOwnersTab("PENDING")}>Waiting approval <span>{pendingOwners.length}</span></button>
-              <button type="button" className={adminOwnersTab === "APPROVED" ? "admin-owner-tab active" : "admin-owner-tab"} aria-pressed={adminOwnersTab === "APPROVED"} onClick={() => setAdminOwnersTab("APPROVED")}>Approved <span>{approvedOwners.length}</span></button>
-            </nav>
             <div className="admin-list-heading">
               <div>
-                <h2>{adminOwnersTab === "PENDING" ? "Waiting for approval" : "Approved owners"}</h2>
-                <p>{adminOwnersTab === "PENDING" ? "Review the PG details before granting account access." : "Owners who can currently sign in to manage their PG."}</p>
+                <h2>{pendingOwners.length + approvedOwners.length} registered owners</h2>
+                <p>Approved owners and registrations waiting for your review.</p>
               </div>
               <button type="button" className="button button-light" disabled={loading} onClick={handleAdminRefresh}>{loading ? "Refreshing..." : "Refresh"}</button>
             </div>
-            {(() => {
-              const owners = adminOwnersTab === "PENDING" ? pendingOwners : approvedOwners;
-              return owners.length === 0 ? (
-                <div className="admin-empty-state">
-                  <span className="admin-empty-mark" aria-hidden="true">{adminOwnersTab === "PENDING" ? "✓" : "—"}</span>
-                  <strong>{adminOwnersTab === "PENDING" ? "You’re all caught up" : "No approved owners yet"}</strong>
-                  <p>{adminOwnersTab === "PENDING" ? "New owner registrations will appear here for review." : "Approved PG owners will appear here."}</p>
-                </div>
-              ) : (
-                <div className="admin-owner-list">
-                  {owners.map((owner) => (
-                    <article className="admin-owner-card" key={owner.id}>
-                      <div className="admin-owner-card-main">
-                        <div className="admin-owner-avatar" aria-hidden="true">{owner.pgName.trim().charAt(0).toUpperCase()}</div>
-                        <div className="admin-owner-info">
-                          <div className="admin-owner-title">
-                            <strong>{owner.pgName}</strong>
-                            <span className={`owner-status ${adminOwnersTab === "PENDING" ? "owner-status-pending" : "owner-status-approved"}`}>{adminOwnersTab === "PENDING" ? "Pending" : "Approved"}</span>
+            <div className="admin-owner-columns">
+              {[
+                { title: "Approved owners", owners: approvedOwners, status: "APPROVED", empty: "No approved owners yet." },
+                { title: "Waiting approval", owners: pendingOwners, status: "PENDING", empty: "No registrations are waiting for approval." }
+              ].map(({ title, owners, status, empty }) => (
+                <section className="admin-owner-column" key={status} aria-label={`${title}: ${owners.length}`}>
+                  <header className="admin-owner-column-heading">
+                    <h3>{title}</h3>
+                    <span>{owners.length}</span>
+                  </header>
+                  {owners.length === 0 ? (
+                    <div className="admin-empty-state">
+                      <p>{empty}</p>
+                    </div>
+                  ) : (
+                    <div className="admin-owner-list">
+                      {owners.map((owner) => (
+                        <article className="admin-owner-card" key={owner.id}>
+                          <div className="admin-owner-card-main">
+                            <div className="admin-owner-avatar" aria-hidden="true">{owner.pgName.trim().charAt(0).toUpperCase()}</div>
+                            <div className="admin-owner-info">
+                              <div className="admin-owner-title">
+                                <strong>{owner.pgName}</strong>
+                                <span className={`owner-status ${status === "PENDING" ? "owner-status-pending" : "owner-status-approved"}`}>{status === "PENDING" ? "Pending" : "Approved"}</span>
+                              </div>
+                              <div className="admin-owner-details">
+                                <span><small>USERNAME</small>{owner.username}</span>
+                                <span><small>MOBILE NUMBER</small>{owner.mobileNumber}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="admin-owner-details">
-                            <span><small>USERNAME</small>{owner.username}</span>
-                            <span><small>MOBILE NUMBER</small>{owner.mobileNumber}</span>
-                          </div>
-                        </div>
-                      </div>
-                      {adminOwnersTab === "PENDING" && <button type="button" className="button button-primary" disabled={loading} onClick={() => approveOwner(owner.id)}>Approve owner</button>}
-                    </article>
-                  ))}
-                </div>
-              );
-            })()}
+                          {status === "PENDING" && <button type="button" className="button button-primary" disabled={loading} onClick={() => approveOwner(owner.id)}>Approve owner</button>}
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ))}
+            </div>
             <button type="button" className="text-action" onClick={() => {
               setAdminCredentials(null);
               setAdminLoginForm({ username: "", password: "" });
               setPendingOwners([]);
               setApprovedOwners([]);
-              setAdminOwnersTab("PENDING");
               setError("");
               setNotice("");
             }}>Admin sign out</button>
@@ -908,10 +906,12 @@ function App() {
                 </div>
                 {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
                 <form className="stack-form password-change-form" onSubmit={handleSaveProfile}>
+                  <label>Username<input autoComplete="username" minLength="3" maxLength="50" pattern="[A-Za-z0-9._-]+" required value={profileForm.username || ""} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value })} /></label>
                   <label>PG name<input maxLength="100" required value={profileForm.pgName} onChange={(event) => setProfileForm({ ...profileForm, pgName: event.target.value })} /></label>
-                  <label>Owner WhatsApp number (India; +91 added automatically)<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={profileForm.whatsappNumber || ""} onChange={(event) => setProfileForm({ ...profileForm, whatsappNumber: event.target.value })} /></label>
+                  <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={phoneForForm(profileForm.whatsappNumber || "")} onChange={(event) => setProfileForm({ ...profileForm, whatsappNumber: event.target.value })} /></label>
                   <button type="button" className="button button-light" disabled={loading || !profileForm.whatsappNumber} onClick={handleRequestProfileOtp}>Send verification OTP</button>
                   <label>WhatsApp OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={profileForm.otp} onChange={(event) => setProfileForm({ ...profileForm, otp: event.target.value })} /></label>
+                  <p className="muted">Changes are saved after you verify the mobile number with an OTP. Your username is used for your next sign-in.</p>
                   <p className="muted">Automatic rent reminders are sent at 9:00 AM India time on each active resident's monthly joining-date day.</p>
                   <div className="form-footer-actions">
                     <button type="button" className="button button-light" onClick={() => setProfileOpen(false)}>Cancel</button>
@@ -995,12 +995,19 @@ function App() {
               {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
               {notice && <div className="alert alert-success dialog-alert" role="status">{notice}</div>}
               <div className="rent-year-selector">
-                <button className="button button-light" disabled={loading} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear - 1)}>Previous year</button>
+                <button className="button button-light" disabled={loading || rentPaymentYear <= Number(rentPaymentResident.joiningDate.slice(0, 4))} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear - 1)}>Previous year</button>
                 <strong>{rentPaymentYear}</strong>
                 <button className="button button-light" disabled={loading || rentPaymentYear >= new Date().getFullYear()} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear + 1)}>Next year</button>
               </div>
+              <p className="rent-history-start">Rent history starts from {new Date(`${rentPaymentResident.joiningDate}T00:00:00`).toLocaleString("en", { month: "long", year: "numeric" })}, the resident’s joining month.</p>
               <div className="rent-month-grid">
-                {Array.from({ length: 12 }, (_, index) => {
+                {Array.from({ length: 12 }, (_, index) => index)
+                  .filter((index) => {
+                    const joiningDate = new Date(`${rentPaymentResident.joiningDate}T00:00:00`);
+                    return rentPaymentYear > joiningDate.getFullYear()
+                      || (rentPaymentYear === joiningDate.getFullYear() && index >= joiningDate.getMonth());
+                  })
+                  .map((index) => {
                   const month = index + 1;
                   const payment = rentPayments.find((record) => record.month === month);
                   const draftOpen = paymentDraft?.month === month;

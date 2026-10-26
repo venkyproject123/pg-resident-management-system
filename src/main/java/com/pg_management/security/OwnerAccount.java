@@ -94,6 +94,10 @@ public class OwnerAccount {
 		this.whatsappVerified = true;
 	}
 
+	public void updateUsername(String username) {
+		this.username = username;
+	}
+
 	public void changePassword(String passwordHash) {
 		this.passwordHash = passwordHash;
 	}

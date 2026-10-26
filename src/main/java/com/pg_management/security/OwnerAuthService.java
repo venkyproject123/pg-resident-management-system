@@ -95,7 +95,7 @@ public class OwnerAuthService {
 	public OwnerProfile getProfile(String username) {
 		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
-		return new OwnerProfile(owner.getPgName(), owner.getWhatsappNumber());
+		return new OwnerProfile(owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber());
 	}
 
 	public void requestProfileOtp(String username, String whatsappNumber, String requesterAddress) {
@@ -107,21 +107,34 @@ public class OwnerAuthService {
 	public void updateProfile(String username, ProfileUpdateRequest request) {
 		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
+		String updatedUsername = request.username().trim();
+		if (!adminUsername.isBlank() && updatedUsername.equalsIgnoreCase(adminUsername)) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is reserved");
+		}
+		ownerAccountRepository.findByUsername(updatedUsername)
+				.filter(existingOwner -> !existingOwner.getId().equals(owner.getId()))
+				.ifPresent(existingOwner -> {
+					throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already registered");
+				});
 		ownerOtpService.updateOwnerProfile(
 				owner.getId(), request.pgName(), request.whatsappNumber(), request.otp());
+		owner.updateUsername(updatedUsername);
+		ownerAccountRepository.save(owner);
 	}
 
 	public void resetPassword(String username, String whatsappNumber, String otp, String newPassword) {
 		ownerOtpService.resetPassword(username, whatsappNumber, otp, newPassword);
 	}
 
-	public record OwnerProfile(String pgName, String whatsappNumber) {
+	public record OwnerProfile(String username, String pgName, String whatsappNumber) {
 	}
 
 	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber) {
 	}
 
 	public record ProfileUpdateRequest(
+			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(min = 3, max = 50)
+			@jakarta.validation.constraints.Pattern(regexp = "^[A-Za-z0-9._-]+$") String username,
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String pgName,
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Pattern(
 					regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String whatsappNumber,
