@@ -38,6 +38,7 @@ public class OwnerAuthController {
 				request.username(),
 				request.password(),
 				request.pgName(),
+				request.location(),
 				request.mobileNumber());
 		return ResponseEntity.accepted().build();
 	}
@@ -87,6 +88,7 @@ public class OwnerAuthController {
 			@NotBlank @Size(min = 3, max = 50) @Pattern(regexp = "^[A-Za-z0-9._-]+$") String username,
 			@NotBlank @Size(min = 12, max = 128) String password,
 			@NotBlank @Size(max = 100) String pgName,
+			@NotBlank @Size(max = 150) String location,
 			@NotBlank @Pattern(regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String mobileNumber) {
 	}
 

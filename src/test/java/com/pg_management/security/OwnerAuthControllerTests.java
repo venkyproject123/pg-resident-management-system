@@ -37,12 +37,14 @@ class OwnerAuthControllerTests {
 								  "username": "new-owner",
 								  "password": "a-long-owner-password",
 								  "pgName": "Sample PG",
+								  "location": "Madhapur, Hyderabad",
 								  "mobileNumber": "9876543210"
 								}
 								"""))
 				.andExpect(status().isAccepted());
 
-		verify(ownerAuthService).registerOwner("new-owner", "a-long-owner-password", "Sample PG", "9876543210");
+		verify(ownerAuthService).registerOwner(
+				"new-owner", "a-long-owner-password", "Sample PG", "Madhapur, Hyderabad", "9876543210");
 		verifyNoMoreInteractions(ownerAuthService);
 	}
 
@@ -54,6 +56,22 @@ class OwnerAuthControllerTests {
 								{
 								  "username": "new-owner",
 								  "password": "too-short",
+								  "pgName": "Sample PG",
+								  "location": "Madhapur, Hyderabad",
+								  "mobileNumber": "9876543210"
+								}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void ownerRegistrationRequiresLocation() throws Exception {
+		mockMvc.perform(post("/api/owner/setup")
+						.contentType("application/json")
+						.content("""
+								{
+								  "username": "new-owner",
+								  "password": "a-long-owner-password",
 								  "pgName": "Sample PG",
 								  "mobileNumber": "9876543210"
 								}

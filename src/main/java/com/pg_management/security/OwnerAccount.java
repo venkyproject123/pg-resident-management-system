@@ -28,6 +28,9 @@ public class OwnerAccount {
 	@Column(name = "pg_name", nullable = false, length = 100)
 	private String pgName;
 
+	@Column(name = "location", length = 150)
+	private String location;
+
 	@Column(name = "whatsapp_number", unique = true, length = 20)
 	private String whatsappNumber;
 
@@ -44,14 +47,20 @@ public class OwnerAccount {
 	}
 
 	public OwnerAccount(String username, String passwordHash, String pgName, String whatsappNumber) {
-		this(username, passwordHash, pgName, whatsappNumber, true);
+		this(username, passwordHash, pgName, null, whatsappNumber, true);
 	}
 
 	public OwnerAccount(String username, String passwordHash, String pgName, String whatsappNumber, boolean approved) {
+		this(username, passwordHash, pgName, null, whatsappNumber, approved);
+	}
+
+	public OwnerAccount(
+			String username, String passwordHash, String pgName, String location, String whatsappNumber, boolean approved) {
 		this.accountScope = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 		this.username = username;
 		this.passwordHash = passwordHash;
 		this.pgName = pgName;
+		this.location = location;
 		this.whatsappNumber = whatsappNumber;
 		this.approved = approved;
 	}
@@ -74,6 +83,10 @@ public class OwnerAccount {
 
 	public String getPgName() {
 		return pgName;
+	}
+
+	public String getLocation() {
+		return location;
 	}
 
 	public String getWhatsappNumber() {

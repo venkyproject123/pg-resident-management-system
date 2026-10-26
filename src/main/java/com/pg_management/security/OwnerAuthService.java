@@ -42,6 +42,7 @@ public class OwnerAuthService {
 			String username,
 			String password,
 			String pgName,
+			String location,
 			String mobileNumber) {
 		if (!adminUsername.isBlank() && username.equalsIgnoreCase(adminUsername)) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is reserved");
@@ -54,14 +55,15 @@ public class OwnerAuthService {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "That mobile number is already registered");
 		}
 		ownerAccountRepository.saveAndFlush(new OwnerAccount(
-				username, passwordEncoder.encode(password), pgName.trim(), normalizedNumber, false));
+				username, passwordEncoder.encode(password), pgName.trim(), location.trim(), normalizedNumber, false));
 	}
 
 	@Transactional(readOnly = true)
 	public List<OwnerSummary> findPendingOwners() {
 		return ownerAccountRepository.findAllByApprovedFalseOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
-						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber()))
+						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber(),
+						owner.getLocation()))
 				.toList();
 	}
 
@@ -69,7 +71,8 @@ public class OwnerAuthService {
 	public List<OwnerSummary> findApprovedOwners() {
 		return ownerAccountRepository.findAllByApprovedTrueOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
-						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber()))
+						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber(),
+						owner.getLocation()))
 				.toList();
 	}
 
@@ -129,7 +132,7 @@ public class OwnerAuthService {
 	public record OwnerProfile(String username, String pgName, String whatsappNumber) {
 	}
 
-	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber) {
+	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber, String location) {
 	}
 
 	public record ProfileUpdateRequest(

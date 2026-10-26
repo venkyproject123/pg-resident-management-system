@@ -127,7 +127,7 @@ function App() {
   const [pendingOwners, setPendingOwners] = useState([]);
   const [approvedOwners, setApprovedOwners] = useState([]);
   const [authMode, setAuthMode] = useState("LOGIN");
-  const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", mobileNumber: "" });
+  const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", location: "", mobileNumber: "" });
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
   const [registrationCredentials, setRegistrationCredentials] = useState(null);
   const [registrationApproved, setRegistrationApproved] = useState(false);
@@ -269,7 +269,7 @@ function App() {
       setRegistrationSuccessPgName(setupForm.pgName.trim());
       setRegistrationCredentials({ username: setupForm.username, password: setupForm.password });
       setRegistrationApproved(false);
-      setSetupForm({ username: "", password: "", pgName: "", mobileNumber: "" });
+      setSetupForm({ username: "", password: "", pgName: "", location: "", mobileNumber: "" });
       setAuthMode("REGISTRATION_SUCCESS");
     } catch (requestError) {
       setError(requestError.message);
@@ -733,8 +733,8 @@ function App() {
             </div>
             <div className="admin-owner-columns">
               {[
-                { title: "Approved owners", owners: approvedOwners, status: "APPROVED", empty: "No approved owners yet." },
-                { title: "Waiting approval", owners: pendingOwners, status: "PENDING", empty: "No registrations are waiting for approval." }
+                { title: "Waiting approval", owners: pendingOwners, status: "PENDING", empty: "No registrations are waiting for approval." },
+                { title: "Approved owners", owners: approvedOwners, status: "APPROVED", empty: "No approved owners yet." }
               ].map(({ title, owners, status, empty }) => (
                 <section className="admin-owner-column" key={status} aria-label={`${title}: ${owners.length}`}>
                   <header className="admin-owner-column-heading">
@@ -759,6 +759,7 @@ function App() {
                               <div className="admin-owner-details">
                                 <span><small>USERNAME</small>{owner.username}</span>
                                 <span><small>MOBILE NUMBER</small>{owner.mobileNumber}</span>
+                                <span><small>LOCATION / AREA</small>{owner.location || "Not provided"}</span>
                               </div>
                             </div>
                           </div>
@@ -842,6 +843,7 @@ function App() {
           </form>}
           {authMode === "SETUP" && <form className="stack-form" onSubmit={handleSetupOwner}>
             <label>PG name<input maxLength="100" required value={setupForm.pgName} onChange={(event) => setSetupForm({ ...setupForm, pgName: event.target.value })} /></label>
+            <label>Location / area<input maxLength="150" placeholder="e.g. Madhapur, Hyderabad" required value={setupForm.location} onChange={(event) => setSetupForm({ ...setupForm, location: event.target.value })} /></label>
             <label>Username<input autoComplete="username" minLength="3" maxLength="50" required value={setupForm.username} onChange={(event) => setSetupForm({ ...setupForm, username: event.target.value })} /></label>
             <label>Password<SecretInput maxLength="128" autoComplete="new-password" required value={setupForm.password} onChange={(event) => {
               setSetupForm({ ...setupForm, password: event.target.value });
