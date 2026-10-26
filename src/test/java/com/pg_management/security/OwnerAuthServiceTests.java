@@ -123,11 +123,13 @@ class OwnerAuthServiceTests {
 		OwnerAccount owner = new OwnerAccount("old-name", "hash", "Sample PG", "+919876543210");
 		when(ownerAccountRepository.findByUsername("old-name")).thenReturn(Optional.of(owner));
 		when(ownerAccountRepository.findByUsername("new-name")).thenReturn(Optional.empty());
-		var request = new OwnerAuthService.ProfileUpdateRequest("new-name", "Updated PG", "9876543211", "123456");
+		var request = new OwnerAuthService.ProfileUpdateRequest(
+				"new-name", "Updated PG", "Madhapur, Hyderabad", "9876543211", "123456");
 
 		ownerAuthService.updateProfile("old-name", request);
 
 		assertEquals("new-name", owner.getUsername());
+		assertEquals("Madhapur, Hyderabad", owner.getLocation());
 		org.mockito.Mockito.verify(ownerOtpService).updateOwnerProfile(
 				owner.getId(), "Updated PG", "9876543211", "123456");
 		verify(ownerAccountRepository).save(owner);
@@ -137,7 +139,8 @@ class OwnerAuthServiceTests {
 	void updateProfileRejectsAdminUsername() {
 		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210");
 		when(ownerAccountRepository.findByUsername("owner")).thenReturn(Optional.of(owner));
-		var request = new OwnerAuthService.ProfileUpdateRequest("ADMIN", "Sample PG", "9876543210", "123456");
+		var request = new OwnerAuthService.ProfileUpdateRequest(
+				"ADMIN", "Sample PG", "Area", "9876543210", "123456");
 
 		var exception = org.junit.jupiter.api.Assertions.assertThrows(
 				org.springframework.web.server.ResponseStatusException.class,

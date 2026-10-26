@@ -133,7 +133,7 @@ function App() {
   const [registrationApproved, setRegistrationApproved] = useState(false);
   const [recoveryForm, setRecoveryForm] = useState({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ pgName: "", whatsappNumber: "", otp: "" });
+  const [profileForm, setProfileForm] = useState({ pgName: "", location: "", whatsappNumber: "", otp: "" });
   const [residents, setResidents] = useState([]);
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
@@ -713,23 +713,36 @@ function App() {
   if (!credentials) {
     if (adminCredentials) {
       return (
-        <main className="login-shell">
-          <section className="login-card admin-console-card">
+        <main className="admin-page-shell">
+          <header className="admin-topbar">
             <a className="brand" href="/" aria-label="Haven home">
               <span className="brand-mark">H</span>
               <span>haven<span className="brand-period">.</span></span>
             </a>
-            <p className="eyebrow">ADMIN PORTAL</p>
-            <h1>Owner management</h1>
-            <p className="muted">Review registrations and keep track of owner access across Haven.</p>
+            <button type="button" className="button button-light" onClick={() => {
+              setAdminCredentials(null);
+              setAdminLoginForm({ username: "", password: "" });
+              setPendingOwners([]);
+              setApprovedOwners([]);
+              setError("");
+              setNotice("");
+            }}>Admin sign out</button>
+          </header>
+          <section className="admin-page-content">
+            <div className="admin-page-heading">
+              <div>
+                <p className="eyebrow">ADMIN PORTAL</p>
+                <h1>Owner management</h1>
+                <p className="muted">Review registrations and manage owner access across Haven.</p>
+              </div>
+              <button type="button" className="button button-light" disabled={loading} onClick={handleAdminRefresh}>{loading ? "Refreshing..." : "Refresh owners"}</button>
+            </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             {notice && <div className="alert alert-success" role="status">{notice}</div>}
-            <div className="admin-list-heading">
-              <div>
-                <h2>{pendingOwners.length + approvedOwners.length} registered owners</h2>
-                <p>Approved owners and registrations waiting for your review.</p>
-              </div>
-              <button type="button" className="button button-light" disabled={loading} onClick={handleAdminRefresh}>{loading ? "Refreshing..." : "Refresh"}</button>
+            <div className="admin-total-card">
+              <span>Total registered owners</span>
+              <strong>{pendingOwners.length + approvedOwners.length}</strong>
+              <small>{pendingOwners.length} waiting · {approvedOwners.length} approved</small>
             </div>
             <div className="admin-owner-columns">
               {[
@@ -738,17 +751,16 @@ function App() {
               ].map(({ title, owners, status, empty }) => (
                 <section className="admin-owner-column" key={status} aria-label={`${title}: ${owners.length}`}>
                   <header className="admin-owner-column-heading">
-                    <h3>{title}</h3>
+                    <h2>{title}</h2>
                     <span>{owners.length}</span>
                   </header>
                   {owners.length === 0 ? (
-                    <div className="admin-empty-state">
-                      <p>{empty}</p>
-                    </div>
+                    <div className="admin-empty-state"><p>{empty}</p></div>
                   ) : (
                     <div className="admin-owner-list">
-                      {owners.map((owner) => (
+                      {owners.map((owner, index) => (
                         <article className="admin-owner-card" key={owner.id}>
+                          <div className="admin-owner-number">Owner No. {index + 1}</div>
                           <div className="admin-owner-card-main">
                             <div className="admin-owner-avatar" aria-hidden="true">{owner.pgName.trim().charAt(0).toUpperCase()}</div>
                             <div className="admin-owner-info">
@@ -771,25 +783,7 @@ function App() {
                 </section>
               ))}
             </div>
-            <button type="button" className="text-action" onClick={() => {
-              setAdminCredentials(null);
-              setAdminLoginForm({ username: "", password: "" });
-              setPendingOwners([]);
-              setApprovedOwners([]);
-              setError("");
-              setNotice("");
-            }}>Admin sign out</button>
           </section>
-          <aside className="login-aside">
-            <div className="aside-orb orb-one" />
-            <div className="aside-orb orb-two" />
-            <div className="aside-content">
-              <span className="aside-kicker">Haven administration</span>
-              <h2>Approvals<br />in your hands.</h2>
-              <p>Approve an owner to activate their private PG dashboard.</p>
-            </div>
-            <span className="aside-caption">RESIDENT MANAGEMENT · MADE SIMPLE</span>
-          </aside>
         </main>
       );
     }
@@ -960,6 +954,7 @@ function App() {
                 <form className="stack-form password-change-form" onSubmit={handleSaveProfile}>
                   <label>Username<input autoComplete="username" minLength="3" maxLength="50" pattern="[A-Za-z0-9._-]+" required value={profileForm.username || ""} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value })} /></label>
                   <label>PG name<input maxLength="100" required value={profileForm.pgName} onChange={(event) => setProfileForm({ ...profileForm, pgName: event.target.value })} /></label>
+                  <label>Location / area<input maxLength="150" required value={profileForm.location || ""} onChange={(event) => setProfileForm({ ...profileForm, location: event.target.value })} /></label>
                   <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={phoneForForm(profileForm.whatsappNumber || "")} onChange={(event) => setProfileForm({ ...profileForm, whatsappNumber: event.target.value })} /></label>
                   <button type="button" className="button button-light" disabled={loading || !profileForm.whatsappNumber} onClick={handleRequestProfileOtp}>Send verification OTP</button>
                   <label>WhatsApp OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={profileForm.otp} onChange={(event) => setProfileForm({ ...profileForm, otp: event.target.value })} /></label>

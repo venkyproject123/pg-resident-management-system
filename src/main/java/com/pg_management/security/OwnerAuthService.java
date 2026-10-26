@@ -98,7 +98,8 @@ public class OwnerAuthService {
 	public OwnerProfile getProfile(String username) {
 		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
-		return new OwnerProfile(owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber());
+		return new OwnerProfile(
+				owner.getUsername(), owner.getPgName(), owner.getLocation(), owner.getWhatsappNumber());
 	}
 
 	public void requestProfileOtp(String username, String whatsappNumber, String requesterAddress) {
@@ -122,6 +123,7 @@ public class OwnerAuthService {
 		ownerOtpService.updateOwnerProfile(
 				owner.getId(), request.pgName(), request.whatsappNumber(), request.otp());
 		owner.updateUsername(updatedUsername);
+		owner.updateLocation(request.location().trim());
 		ownerAccountRepository.save(owner);
 	}
 
@@ -129,7 +131,7 @@ public class OwnerAuthService {
 		ownerOtpService.resetPassword(username, whatsappNumber, otp, newPassword);
 	}
 
-	public record OwnerProfile(String username, String pgName, String whatsappNumber) {
+	public record OwnerProfile(String username, String pgName, String location, String whatsappNumber) {
 	}
 
 	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber, String location) {
@@ -139,6 +141,7 @@ public class OwnerAuthService {
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(min = 3, max = 50)
 			@jakarta.validation.constraints.Pattern(regexp = "^[A-Za-z0-9._-]+$") String username,
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String pgName,
+			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 150) String location,
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Pattern(
 					regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String whatsappNumber,
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Pattern(

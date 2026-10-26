@@ -111,6 +111,10 @@ public class OwnerAccount {
 		this.username = username;
 	}
 
+	public void updateLocation(String location) {
+		this.location = location;
+	}
+
 	public void changePassword(String passwordHash) {
 		this.passwordHash = passwordHash;
 	}
