@@ -218,18 +218,17 @@ function App() {
   }, [authMode, registrationCredentials, registrationApproved]);
 
   async function loadResidents(owner, keyword = "", status = "ALL") {
-    const query = keyword.trim();
-    const path = query
-      ? `${RESIDENTS_API}/search?keyword=${encodeURIComponent(query)}${status === "ALL" ? "" : `&status=${status}`}`
-      : status === "ACTIVE"
-        ? `${RESIDENTS_API}/get`
-        : status === "VACATED"
-        ? `${RESIDENTS_API}/status/VACATED`
-          : `${RESIDENTS_API}/all`;
-    const [allResidents, data] = await Promise.all([
-      request(`${RESIDENTS_API}/all`, owner),
-      request(path, owner)
-    ]);
+    const allResidents = await request(`${RESIDENTS_API}/all`, owner);
+    const query = keyword.trim().toLocaleLowerCase();
+    const data = allResidents.filter((resident) => {
+      const matchesStatus = status === "ALL" || resident.status === status;
+      const matchesQuery = !query || [
+        resident.name,
+        resident.fatherName,
+        resident.roomNumber
+      ].some((value) => value?.toLocaleLowerCase().includes(query));
+      return matchesStatus && matchesQuery;
+    });
     setResidents(data);
     setResidentTotals({
       active: allResidents.filter((resident) => resident.status === "ACTIVE").length,
@@ -243,8 +242,10 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      await loadResidents(loginForm);
-      const profile = await request("/api/owner/profile", loginForm);
+      const [, profile] = await Promise.all([
+        loadResidents(loginForm),
+        request("/api/owner/profile", loginForm)
+      ]);
       setProfileForm({ ...profile, whatsappNumber: phoneForForm(profile.whatsappNumber || ""), otp: "" });
       setCredentials(loginForm);
       setNotice("");
@@ -339,7 +340,11 @@ function App() {
         { method: "PUT" },
         "Admin authentication failed. Please sign in again."
       );
-      await refreshAdminOwners();
+      const approvedOwner = pendingOwners.find((owner) => owner.id === ownerId);
+      if (approvedOwner) {
+        setPendingOwners((owners) => owners.filter((owner) => owner.id !== ownerId));
+        setApprovedOwners((owners) => [...owners, approvedOwner]);
+      }
       setNotice("Owner registration approved. They can now sign in.");
     } catch (requestError) {
       setError(requestError.message);
@@ -658,10 +663,10 @@ function App() {
             method: paymentDraft.method
           })
         });
-      const payments = await request(
-        `${RESIDENTS_API}/${rentPaymentResident.id}/rent-payments?year=${rentPaymentYear}`,
-        credentials);
-      setRentPayments(payments);
+      setRentPayments((payments) => [
+        ...payments.filter((payment) => payment.month !== result.month),
+        result
+      ].sort((first, second) => first.month - second.month));
       setPaymentDraft(null);
       setNotice(result.wasAlreadyPaid
         ? "Rent payment details updated. No new WhatsApp confirmation was sent."
