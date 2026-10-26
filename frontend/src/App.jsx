@@ -839,10 +839,17 @@ function App() {
             <label>PG name<input maxLength="100" required value={setupForm.pgName} onChange={(event) => setSetupForm({ ...setupForm, pgName: event.target.value })} /></label>
             <label>Location / area<input maxLength="150" placeholder="e.g. Madhapur, Hyderabad" required value={setupForm.location} onChange={(event) => setSetupForm({ ...setupForm, location: event.target.value })} /></label>
             <label>Username<input autoComplete="username" minLength="3" maxLength="50" required value={setupForm.username} onChange={(event) => setSetupForm({ ...setupForm, username: event.target.value })} /></label>
-            <label>Password<SecretInput maxLength="128" autoComplete="new-password" required value={setupForm.password} onChange={(event) => {
+            <label className="password-field">Password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" aria-describedby="registration-password-help" required value={setupForm.password} onChange={(event) => {
               setSetupForm({ ...setupForm, password: event.target.value });
-              if (event.target.value.length >= 12) setError("");
-            }} /></label>
+            }} />
+              <span id="registration-password-help" className={`field-help${setupForm.password.length > 0 && setupForm.password.length < 12 ? " field-help-error" : ""}`} aria-live="polite">
+                {setupForm.password.length >= 12
+                  ? "Password length meets the 12-character minimum."
+                  : setupForm.password.length > 0
+                    ? `Use at least 12 characters (${setupForm.password.length}/12).`
+                    : "Use at least 12 characters."}
+              </span>
+            </label>
             <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value })} /></label>
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
           </form>}
@@ -984,19 +991,19 @@ function App() {
                   <tbody>
                     {residents.map((resident) => (
                       <tr key={resident.id}>
-                        <td>
+                        <td data-label="Resident">
                           <div className="resident-cell">
                             <span className="avatar">{resident.name.trim().charAt(0).toUpperCase()}</span>
                             <span><strong>{resident.name}</strong><small>Father: {resident.fatherName}</small></span>
                           </div>
                         </td>
-                        <td>{resident.mobileNumber || "—"}</td>
-                        <td><span className="room-tag">{resident.roomNumber}</span></td>
-                        <td className="rent-cell">₹{Number(resident.rent).toLocaleString("en-IN")}</td>
-                        <td>{resident.joiningDate}</td>
-                        <td><span className={`status-badge ${resident.status === "ACTIVE" ? "status-active" : "status-vacated"}`}><span />{resident.status === "ACTIVE" ? "Active" : "Vacated"}</span></td>
-                        <td>{resident.vacatedDate || "—"}</td>
-                        <td className="details-cell">
+                        <td data-label="Mobile">{resident.mobileNumber || "—"}</td>
+                        <td data-label="Room"><span className="room-tag">{resident.roomNumber}</span></td>
+                        <td data-label="Rent / month" className="rent-cell">₹{Number(resident.rent).toLocaleString("en-IN")}</td>
+                        <td data-label="Joined">{resident.joiningDate}</td>
+                        <td data-label="Status"><span className={`status-badge ${resident.status === "ACTIVE" ? "status-active" : "status-vacated"}`}><span />{resident.status === "ACTIVE" ? "Active" : "Vacated"}</span></td>
+                        <td data-label="Vacated date">{resident.vacatedDate || "—"}</td>
+                        <td data-label="Resident details" className="details-cell">
                           <div><span>Father</span><strong>{resident.fatherName}</strong></div>
                           <div><span>Advance</span><strong>₹{Number(resident.advanceAmount).toLocaleString("en-IN")}</strong></div>
                           <div><span>Permanent</span><strong>{resident.permanentAddress}</strong></div>
@@ -1010,7 +1017,7 @@ function App() {
                               : <span className="missing-document">No proof</span>}
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Actions">
                           <div className="row-actions">
                             <button className="text-action" onClick={() => openRentPayments(resident)}>Rent history</button>
                             <button className="text-action" onClick={() => startEdit(resident)}>Edit</button>
