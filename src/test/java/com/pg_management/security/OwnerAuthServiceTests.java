@@ -25,9 +25,6 @@ class OwnerAuthServiceTests {
 	private OwnerAccountRepository ownerAccountRepository;
 
 	@Mock
-	private OwnerOtpService ownerOtpService;
-
-	@Mock
 	private JdbcTemplate jdbcTemplate;
 
 	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
@@ -36,7 +33,7 @@ class OwnerAuthServiceTests {
 	@BeforeEach
 	void createService() {
 		ownerAuthService = new OwnerAuthService(
-				ownerAccountRepository, ownerOtpService, passwordEncoder, jdbcTemplate, "admin");
+				ownerAccountRepository, passwordEncoder, jdbcTemplate, "admin");
 	}
 
 	@Test
@@ -119,19 +116,18 @@ class OwnerAuthServiceTests {
 	}
 
 	@Test
-	void updateProfileChangesUsernameAfterMobileVerification() {
+	void updateProfileChangesUsernameAndPropertyDetails() {
 		OwnerAccount owner = new OwnerAccount("old-name", "hash", "Sample PG", "+919876543210");
 		when(ownerAccountRepository.findByUsername("old-name")).thenReturn(Optional.of(owner));
 		when(ownerAccountRepository.findByUsername("new-name")).thenReturn(Optional.empty());
 		var request = new OwnerAuthService.ProfileUpdateRequest(
-				"new-name", "Updated PG", "Madhapur, Hyderabad", "9876543211", "123456");
+				"new-name", "Updated PG", "Madhapur, Hyderabad");
 
 		ownerAuthService.updateProfile("old-name", request);
 
 		assertEquals("new-name", owner.getUsername());
 		assertEquals("Madhapur, Hyderabad", owner.getLocation());
-		org.mockito.Mockito.verify(ownerOtpService).updateOwnerProfile(
-				owner.getId(), "Updated PG", "9876543211", "123456");
+		assertEquals("Updated PG", owner.getPgName());
 		verify(ownerAccountRepository).save(owner);
 	}
 
@@ -140,14 +136,13 @@ class OwnerAuthServiceTests {
 		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210");
 		when(ownerAccountRepository.findByUsername("owner")).thenReturn(Optional.of(owner));
 		var request = new OwnerAuthService.ProfileUpdateRequest(
-				"ADMIN", "Sample PG", "Area", "9876543210", "123456");
+				"ADMIN", "Sample PG", "Area");
 
 		var exception = org.junit.jupiter.api.Assertions.assertThrows(
 				org.springframework.web.server.ResponseStatusException.class,
 				() -> ownerAuthService.updateProfile("owner", request));
 
 		assertTrue(exception.getReason().contains("reserved"));
-		org.mockito.Mockito.verifyNoInteractions(ownerOtpService);
 	}
 
 }

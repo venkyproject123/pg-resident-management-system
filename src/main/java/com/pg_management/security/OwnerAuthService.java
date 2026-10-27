@@ -15,19 +15,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class OwnerAuthService {
 
 	private final OwnerAccountRepository ownerAccountRepository;
-	private final OwnerOtpService ownerOtpService;
 	private final PasswordEncoder passwordEncoder;
 	private final JdbcTemplate jdbcTemplate;
 	private final String adminUsername;
 
 	public OwnerAuthService(
 			OwnerAccountRepository ownerAccountRepository,
-			OwnerOtpService ownerOtpService,
 			PasswordEncoder passwordEncoder,
 			JdbcTemplate jdbcTemplate,
 			@Value("${app.admin.username:}") String adminUsername) {
 		this.ownerAccountRepository = ownerAccountRepository;
-		this.ownerOtpService = ownerOtpService;
 		this.passwordEncoder = passwordEncoder;
 		this.jdbcTemplate = jdbcTemplate;
 		this.adminUsername = adminUsername;
@@ -76,6 +73,11 @@ public class OwnerAuthService {
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
+	public OwnerOverview findOwnersOverview() {
+		return new OwnerOverview(findPendingOwners(), findApprovedOwners());
+	}
+
 	public void approveOwner(Long ownerId) {
 		OwnerAccount owner = ownerAccountRepository.findById(ownerId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"));
@@ -90,22 +92,12 @@ public class OwnerAuthService {
 		}
 	}
 
-	public void requestPasswordResetOtp(String username, String whatsappNumber, String requesterAddress) {
-		ownerOtpService.requestPasswordResetOtp(username, whatsappNumber, requesterAddress);
-	}
-
 	@Transactional(readOnly = true)
 	public OwnerProfile getProfile(String username) {
 		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
 		return new OwnerProfile(
 				owner.getUsername(), owner.getPgName(), owner.getLocation(), owner.getWhatsappNumber());
-	}
-
-	public void requestProfileOtp(String username, String whatsappNumber, String requesterAddress) {
-		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
-		ownerOtpService.requestProfileUpdateOtp(owner.getId(), whatsappNumber, requesterAddress);
 	}
 
 	public void updateProfile(String username, ProfileUpdateRequest request) {
@@ -120,15 +112,10 @@ public class OwnerAuthService {
 				.ifPresent(existingOwner -> {
 					throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already registered");
 				});
-		ownerOtpService.updateOwnerProfile(
-				owner.getId(), request.pgName(), request.whatsappNumber(), request.otp());
 		owner.updateUsername(updatedUsername);
+		owner.updatePgName(request.pgName().trim());
 		owner.updateLocation(request.location().trim());
 		ownerAccountRepository.save(owner);
-	}
-
-	public void resetPassword(String username, String whatsappNumber, String otp, String newPassword) {
-		ownerOtpService.resetPassword(username, whatsappNumber, otp, newPassword);
 	}
 
 	public record OwnerProfile(String username, String pgName, String location, String whatsappNumber) {
@@ -137,14 +124,13 @@ public class OwnerAuthService {
 	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber, String location) {
 	}
 
+	public record OwnerOverview(List<OwnerSummary> pending, List<OwnerSummary> approved) {
+	}
+
 	public record ProfileUpdateRequest(
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(min = 3, max = 50)
 			@jakarta.validation.constraints.Pattern(regexp = "^[A-Za-z0-9._-]+$") String username,
 			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String pgName,
-			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 150) String location,
-			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Pattern(
-					regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String whatsappNumber,
-			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Pattern(
-					regexp = "^[0-9]{6}$") String otp) {
+			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 150) String location) {
 	}
 }

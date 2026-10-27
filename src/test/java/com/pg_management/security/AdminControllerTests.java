@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -79,5 +80,16 @@ class AdminControllerTests {
 
 		mockMvc.perform(get("/api/admin/owners/approved").header("Authorization", AUTHORIZATION))
 				.andExpect(status().isOk());
+	}
+
+	@Test
+	void adminCanLoadBothOwnerListsWithOneAuthenticatedRequest() throws Exception {
+		when(ownerAuthService.findOwnersOverview()).thenReturn(
+				new OwnerAuthService.OwnerOverview(List.of(), List.of()));
+
+		mockMvc.perform(get("/api/admin/owners").header("Authorization", AUTHORIZATION))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.pending").isArray())
+				.andExpect(jsonPath("$.approved").isArray());
 	}
 }

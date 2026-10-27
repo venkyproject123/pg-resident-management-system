@@ -18,8 +18,8 @@ Configure a unique `ADMIN_USERNAME` and a strong `ADMIN_PASSWORD` as private env
 
 Owner and admin sign-ins survive a page refresh within the same browser tab session. The resident dashboard opens on active residents and has separate active/vacated totals; search and status filtering run locally for immediate results. On mobile, residents are shown as compact cards with the remaining details and actions available under **All details**. Resident records include a room sharing size (single through four sharing); all residents assigned to a room must use the same capacity. Use **Empty beds** to show rooms with available beds, calculated from that capacity and active residents. Older residents without a sharing size must be edited to set one before their room appears in availability.
 
-## Rent reminders
-Rent reminders are scheduled for 9:00 AM India time on the day before each active resident's monthly due date, calculated from their joining day (clamped to the month's last day). The approved WhatsApp reminder template configured as `WHATSAPP_RENT_REMINDER_TEMPLATE` should describe the payment as due tomorrow; its third body variable is the rent period (for example, `NOVEMBER 2026`).
+## Documents and account recovery
+Resident photos and identity proofs are stored in the MySQL database so they remain available across backend restarts and deployments. New uploads no longer depend on an instance-local filesystem. Existing documents that were stored on a previous server's local filesystem may need to be uploaded again if that server's files are no longer available. WhatsApp Cloud API messaging has been removed; password recovery and WhatsApp notifications are unavailable. Contact the administrator for account recovery.
 
 ## Technologies Used
 - Java 21

@@ -123,10 +123,6 @@ function residentToForm(resident) {
   };
 }
 
-function phoneForForm(number = "") {
-  return number.startsWith("+91") ? number.slice(3) : number;
-}
-
 function sharingLabel(sharing) {
   return sharing === 1 ? "Single sharing" : `${sharing} sharing`;
 }
@@ -164,9 +160,8 @@ function App() {
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
   const [registrationCredentials, setRegistrationCredentials] = useState(null);
   const [registrationApproved, setRegistrationApproved] = useState(false);
-  const [recoveryForm, setRecoveryForm] = useState({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ pgName: "", location: "", whatsappNumber: "", otp: "" });
+  const [profileForm, setProfileForm] = useState({ username: "", pgName: "", location: "" });
   const [allResidents, setAllResidents] = useState([]);
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
@@ -217,20 +212,18 @@ function App() {
       const restoreSession = async () => {
         try {
           if (savedSession.type === "owner") {
-            const [, profile] = await Promise.all([
-              loadResidents(savedSession.credentials),
-              request("/api/owner/profile", savedSession.credentials)
-            ]);
+            await loadResidents(savedSession.credentials);
             if (!mounted) return;
-            setProfileForm({ ...profile, whatsappNumber: phoneForForm(profile.whatsappNumber || ""), otp: "" });
           } else {
-            const [pending, approved] = await Promise.all([
-              request("/api/admin/owners/pending", savedSession.credentials, {}, "Admin authentication failed. Please sign in again."),
-              request("/api/admin/owners/approved", savedSession.credentials, {}, "Admin authentication failed. Please sign in again.")
-            ]);
+            const overview = await request(
+              "/api/admin/owners",
+              savedSession.credentials,
+              {},
+              "Admin authentication failed. Please sign in again."
+            );
             if (!mounted) return;
-            setPendingOwners(pending);
-            setApprovedOwners(approved);
+            setPendingOwners(overview.pending);
+            setApprovedOwners(overview.approved);
           }
         } catch (requestError) {
           if (requestError.status === 401 || requestError.status === 403) {
@@ -323,11 +316,7 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const [, profile] = await Promise.all([
-        loadResidents(loginForm),
-        request("/api/owner/profile", loginForm)
-      ]);
-      setProfileForm({ ...profile, whatsappNumber: phoneForForm(profile.whatsappNumber || ""), otp: "" });
+      await loadResidents(loginForm);
       sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "owner", credentials: loginForm }));
       setCredentials(loginForm);
       setNotice("");
@@ -366,22 +355,14 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const [pending, approved] = await Promise.all([
-        request(
-          "/api/admin/owners/pending",
-          adminLoginForm,
-          {},
-          "Admin login failed. Check the admin username and password."
-        ),
-        request(
-          "/api/admin/owners/approved",
-          adminLoginForm,
-          {},
-          "Admin login failed. Check the admin username and password."
-        )
-      ]);
-      setPendingOwners(pending);
-      setApprovedOwners(approved);
+      const overview = await request(
+        "/api/admin/owners",
+        adminLoginForm,
+        {},
+        "Admin login failed. Check the admin username and password."
+      );
+      setPendingOwners(overview.pending);
+      setApprovedOwners(overview.approved);
       sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "admin", credentials: adminLoginForm }));
       setAdminCredentials(adminLoginForm);
     } catch (requestError) {
@@ -392,12 +373,14 @@ function App() {
   }
 
   async function refreshAdminOwners() {
-    const [pending, approved] = await Promise.all([
-      request("/api/admin/owners/pending", adminCredentials, {}, "Admin authentication failed. Please sign in again."),
-      request("/api/admin/owners/approved", adminCredentials, {}, "Admin authentication failed. Please sign in again.")
-    ]);
-    setPendingOwners(pending);
-    setApprovedOwners(approved);
+    const overview = await request(
+      "/api/admin/owners",
+      adminCredentials,
+      {},
+      "Admin authentication failed. Please sign in again."
+    );
+    setPendingOwners(overview.pending);
+    setApprovedOwners(overview.approved);
   }
 
   async function handleAdminRefresh() {
@@ -436,50 +419,14 @@ function App() {
     }
   }
 
-  async function handleRequestResetOtp() {
+  async function openProfileSettings() {
+    setProfileOpen(true);
     setLoading(true);
     setError("");
     setNotice("");
     try {
-      await publicRequest("/api/owner/password-reset/otp", {
-        username: recoveryForm.username,
-        whatsappNumber: recoveryForm.whatsappNumber
-      });
-      setNotice("If the username and mobile number match, an OTP has been sent to the registered mobile number.");
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleConfirmPasswordReset(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      await publicRequest("/api/owner/password-reset", recoveryForm);
-      setAuthMode("LOGIN");
-      setLoginForm({ username: recoveryForm.username, password: "" });
-      setRecoveryForm({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
-      setNotice("Password changed. Sign in with your new password.");
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRequestProfileOtp() {
-    setLoading(true);
-    setError("");
-    setNotice("");
-    try {
-      await request("/api/owner/profile/otp", credentials, {
-        method: "POST",
-        body: JSON.stringify({ whatsappNumber: profileForm.whatsappNumber })
-      });
-      setNotice("Verification OTP sent to the mobile number entered above. It expires in 5 minutes.");
+      const profile = await request("/api/owner/profile", credentials);
+      setProfileForm({ username: profile.username, pgName: profile.pgName, location: profile.location || "" });
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -497,13 +444,12 @@ function App() {
         method: "PUT",
         body: JSON.stringify(profileForm)
       });
-      setProfileForm({ ...profileForm, otp: "" });
       const updatedCredentials = { ...credentials, username: profileForm.username.trim() };
       sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "owner", credentials: updatedCredentials }));
       setCredentials(updatedCredentials);
       setLoginForm(updatedCredentials);
       setProfileOpen(false);
-      setNotice("Username, PG name, and verified mobile number updated.");
+      setNotice("Username, PG name, and location updated.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -517,6 +463,7 @@ function App() {
     setAllResidents([]);
     setLoginForm({ username: "", password: "" });
     setResidentTotals({ active: 0, vacated: 0 });
+    setProfileForm({ username: "", pgName: "", location: "" });
     setSearchText("");
     setSelectedStatus("ACTIVE");
     setForm(emptyForm);
@@ -737,10 +684,8 @@ function App() {
       ].sort((first, second) => first.month - second.month));
       setPaymentDraft(null);
       setNotice(result.wasAlreadyPaid
-        ? "Rent payment details updated. No new WhatsApp confirmation was sent."
-        : result.whatsappNotificationSent
-          ? "Rent payment saved and WhatsApp confirmation sent."
-          : "Rent payment saved, but WhatsApp confirmation was not sent. Check the WhatsApp setup and resident mobile number.");
+        ? "Rent payment details updated."
+        : "Rent payment saved successfully.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -761,6 +706,7 @@ function App() {
       if (!response.ok) {
         if (response.status === 401) throw new Error("Your sign-in is no longer valid. Sign out and sign in again.");
         if (response.status === 404) throw new Error("This resident does not have that file uploaded yet.");
+        if (response.status === 410) throw new Error("The file was uploaded before but is no longer available on the server. Please edit the resident and upload it again.");
         throw new Error(`Could not open document (${response.status}).`);
       }
       const blob = await response.blob();
@@ -874,8 +820,8 @@ function App() {
             <span>haven<span className="brand-period">.</span></span>
           </a>
           <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : "OWNER PORTAL"}</p>
-          <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your owner account." : authMode === "FORGOT" ? "Recover your account." : authMode === "ADMIN_LOGIN" ? "Admin sign in." : "Welcome back."}</h1>
-          <p className="muted">{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering in Haven Resident Management System. ${registrationSuccessPgName} registered successfully. Please wait a few seconds for admin approval.` : authMode === "SETUP" ? "Create your PG owner account. An administrator must approve it before you can sign in." : authMode === "FORGOT" ? "Verify the mobile number registered to your account to reset your password." : authMode === "ADMIN_LOGIN" ? "Sign in to review and approve owner registrations." : "Sign in to securely manage your residents."}</p>
+          <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your owner account." : authMode === "ADMIN_LOGIN" ? "Admin sign in." : "Welcome back."}</h1>
+          <p className="muted">{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering in Haven Resident Management System. ${registrationSuccessPgName} registered successfully. Please wait a few seconds for admin approval.` : authMode === "SETUP" ? "Create your PG owner account. An administrator must approve it before you can sign in." : authMode === "ADMIN_LOGIN" ? "Sign in to review and approve owner registrations." : "Sign in to securely manage your residents."}</p>
           {authMode === "REGISTRATION_SUCCESS" && !registrationApproved && <div className="alert alert-success" role="status">Waiting for an administrator to approve your registration. This page will update when approved.</div>}
           {authMode === "REGISTRATION_SUCCESS" && registrationApproved && <button type="button" className="button button-primary button-wide" onClick={() => {
             setAuthMode("LOGIN");
@@ -931,19 +877,10 @@ function App() {
             <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value })} /></label>
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
           </form>}
-          {authMode === "FORGOT" && <form className="stack-form" onSubmit={handleConfirmPasswordReset}>
-            <label>Username<input autoComplete="username" required value={recoveryForm.username} onChange={(event) => setRecoveryForm({ ...recoveryForm, username: event.target.value })} /></label>
-            <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={recoveryForm.whatsappNumber} onChange={(event) => setRecoveryForm({ ...recoveryForm, whatsappNumber: event.target.value })} /></label>
-            <button type="button" className="button button-light" disabled={loading || !recoveryForm.username || !recoveryForm.whatsappNumber} onClick={handleRequestResetOtp}>Send password reset OTP</button>
-            <label>OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={recoveryForm.otp} onChange={(event) => setRecoveryForm({ ...recoveryForm, otp: event.target.value })} /></label>
-            <label>New password<SecretInput minLength="12" maxLength="128" autoComplete="new-password" required value={recoveryForm.newPassword} onChange={(event) => setRecoveryForm({ ...recoveryForm, newPassword: event.target.value })} /></label>
-            <button className="button button-primary button-wide" disabled={loading}>Reset password</button>
-          </form>}
           {authMode === "LOGIN" && <>
             <button type="button" className="text-action" onClick={() => { setAuthMode("SETUP"); setError(""); setNotice(""); }}>Register your PG</button>
-            <button type="button" className="text-action" onClick={() => { setAuthMode("FORGOT"); setError(""); setNotice(""); }}>Forgot password?</button>
             <button type="button" className="text-action" onClick={() => { setAuthMode("ADMIN_LOGIN"); setError(""); setNotice(""); }}>Admin login</button>
-            <p className="login-footnote">Your password is stored as a one-way hash. Password resets use an OTP sent to your registered mobile number.</p>
+            <p className="login-footnote">Your password is stored as a one-way hash. Contact your administrator if you need help recovering access.</p>
           </>}
           {authMode !== "LOGIN" && authMode !== "REGISTRATION_SUCCESS" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
         </section>
@@ -995,7 +932,7 @@ function App() {
         </a>
         <div className="topbar-right">
           <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
-          <button className="button button-light" onClick={() => setProfileOpen(true)}>PG settings</button>
+          <button className="button button-light" onClick={openProfileSettings}>PG settings</button>
           <button className="button button-light" onClick={logout}>Sign out</button>
         </div>
       </header>
@@ -1093,7 +1030,7 @@ function App() {
             {profileOpen && <div className="dialog-backdrop">
               <section className="resident-dialog panel document-viewer" role="dialog" aria-modal="true" aria-labelledby="pg-settings-title">
                 <div className="panel-heading">
-                  <div><p className="eyebrow">PROPERTY SETTINGS</p><h2 id="pg-settings-title">PG details and rent reminders</h2></div>
+                  <div><p className="eyebrow">PROPERTY SETTINGS</p><h2 id="pg-settings-title">PG details</h2></div>
                   <button className="icon-button" onClick={() => setProfileOpen(false)} aria-label="Close PG settings">×</button>
                 </div>
                 {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
@@ -1101,11 +1038,7 @@ function App() {
                   <label>Username<input autoComplete="username" minLength="3" maxLength="50" pattern="[A-Za-z0-9._-]+" required value={profileForm.username || ""} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value })} /></label>
                   <label>PG name<input maxLength="100" required value={profileForm.pgName} onChange={(event) => setProfileForm({ ...profileForm, pgName: event.target.value })} /></label>
                   <label>Location / area<input maxLength="150" required value={profileForm.location || ""} onChange={(event) => setProfileForm({ ...profileForm, location: event.target.value })} /></label>
-                  <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={phoneForForm(profileForm.whatsappNumber || "")} onChange={(event) => setProfileForm({ ...profileForm, whatsappNumber: event.target.value })} /></label>
-                  <button type="button" className="button button-light" disabled={loading || !profileForm.whatsappNumber} onClick={handleRequestProfileOtp}>Send verification OTP</button>
-                  <label>WhatsApp OTP<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required value={profileForm.otp} onChange={(event) => setProfileForm({ ...profileForm, otp: event.target.value })} /></label>
-                  <p className="muted">Changes are saved after you verify the mobile number with an OTP. Your username is used for your next sign-in.</p>
-                  <p className="muted">Automatic rent reminders are sent at 9:00 AM India time on each active resident's monthly joining-date day.</p>
+                  <p className="muted">Your username is used for your next sign-in. Contact your administrator if you need to reset your password.</p>
                   <div className="form-footer-actions">
                     <button type="button" className="button button-light" onClick={() => setProfileOpen(false)}>Cancel</button>
                     <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving…" : "Save PG settings"}</button>
@@ -1213,7 +1146,7 @@ function App() {
                 <div>
                   <p className="eyebrow">MONTHLY RENT</p>
                   <h2 id="rent-payment-title">{rentPaymentResident.name} · Room {rentPaymentResident.roomNumber}</h2>
-                  <p className="muted">Record rent paid by month. Confirmation is sent to the resident by WhatsApp.</p>
+                  <p className="muted">Record rent paid by month and keep a payment history.</p>
                 </div>
                 <button className="icon-button" onClick={() => setRentPaymentResident(null)} aria-label="Close rent history">×</button>
               </div>

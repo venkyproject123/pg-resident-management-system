@@ -1,6 +1,5 @@
 package com.pg_management.security;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -43,34 +42,9 @@ public class OwnerAuthController {
 		return ResponseEntity.accepted().build();
 	}
 
-	@PostMapping("/password-reset/otp")
-	public ResponseEntity<Void> resetPasswordOtp(
-			@Valid @RequestBody ResetOtpRequest request, HttpServletRequest httpRequest) {
-		ownerAuthService.requestPasswordResetOtp(
-				request.username(), request.whatsappNumber(), httpRequest.getRemoteAddr());
-		return ResponseEntity.accepted().build();
-	}
-
-	@PostMapping("/password-reset")
-	public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetRequest request) {
-		ownerAuthService.resetPassword(
-				request.username(), request.whatsappNumber(), request.otp(), request.newPassword());
-		return ResponseEntity.noContent().build();
-	}
-
 	@GetMapping("/profile")
 	public OwnerAuthService.OwnerProfile profile(Authentication authentication) {
 		return ownerAuthService.getProfile(authentication.getName());
-	}
-
-	@PostMapping("/profile/otp")
-	public ResponseEntity<Void> profileOtp(
-			Authentication authentication,
-			@Valid @RequestBody ProfileOtpRequest request,
-			HttpServletRequest httpRequest) {
-		ownerAuthService.requestProfileOtp(
-				authentication.getName(), request.whatsappNumber(), httpRequest.getRemoteAddr());
-		return ResponseEntity.accepted().build();
 	}
 
 	@PutMapping("/profile")
@@ -90,22 +64,6 @@ public class OwnerAuthController {
 			@NotBlank @Size(max = 100) String pgName,
 			@NotBlank @Size(max = 150) String location,
 			@NotBlank @Pattern(regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String mobileNumber) {
-	}
-
-	public record ResetRequest(
-			@NotBlank String username,
-			@NotBlank @Pattern(regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String whatsappNumber,
-			@NotBlank @Pattern(regexp = "^[0-9]{6}$") String otp,
-			@NotBlank @Size(min = 12, max = 128) String newPassword) {
-	}
-
-	public record ResetOtpRequest(
-			@NotBlank String username,
-			@NotBlank @Pattern(regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String whatsappNumber) {
-	}
-
-	public record ProfileOtpRequest(
-			@NotBlank @Pattern(regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String whatsappNumber) {
 	}
 
 }

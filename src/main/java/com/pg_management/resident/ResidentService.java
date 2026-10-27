@@ -176,7 +176,6 @@ public class ResidentService {
 		uploadDocument(owner, id, file, ResidentDocumentType.IDENTITY_PROOF);
 	}
 
-	@Transactional(readOnly = true)
 	public ResidentDocument getPhoto(OwnerAccount owner, Long id) {
 		Resident resident = getResident(owner, id);
 		if (resident.getPhotoStorageKey() == null) {
@@ -185,7 +184,6 @@ public class ResidentService {
 		return documentStorage.load(resident.getPhotoStorageKey());
 	}
 
-	@Transactional(readOnly = true)
 	public ResidentDocument getIdentityProof(OwnerAccount owner, Long id) {
 		Resident resident = getResident(owner, id);
 		if (resident.getIdentityProofStorageKey() == null) {

@@ -101,10 +101,8 @@ public class OwnerAccount {
 		this.approved = true;
 	}
 
-	public void updateProfile(String pgName, String whatsappNumber) {
+	public void updatePgName(String pgName) {
 		this.pgName = pgName;
-		this.whatsappNumber = whatsappNumber;
-		this.whatsappVerified = true;
 	}
 
 	public void updateUsername(String username) {

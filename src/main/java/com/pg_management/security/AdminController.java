@@ -19,6 +19,11 @@ public class AdminController {
 		this.ownerAuthService = ownerAuthService;
 	}
 
+	@GetMapping
+	public OwnerAuthService.OwnerOverview ownersOverview() {
+		return ownerAuthService.findOwnersOverview();
+	}
+
 	@GetMapping("/pending")
 	public List<OwnerAuthService.OwnerSummary> pendingOwners() {
 		return ownerAuthService.findPendingOwners();

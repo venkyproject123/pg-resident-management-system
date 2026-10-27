@@ -10,6 +10,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -17,7 +18,10 @@ import jakarta.persistence.ManyToOne;
 import com.pg_management.security.OwnerAccount;
 
 @Entity
-@Table(name = "residents")
+@Table(name = "residents", indexes = {
+		@Index(name = "idx_residents_owner_room_name", columnList = "owner_id,room_number,name"),
+		@Index(name = "idx_residents_owner_status_room", columnList = "owner_id,status,room_number")
+})
 public class Resident {
 
 	@Id

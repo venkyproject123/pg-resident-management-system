@@ -5,7 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.nio.file.StandardOpenOption;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -26,8 +25,12 @@ public class PrivateDocumentStorageService {
 			Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|pdf)");
 
 	private final Path storageDirectory;
+	private final StoredResidentDocumentRepository documentRepository;
 
-	public PrivateDocumentStorageService(@Value("${app.upload.directory}") String directory) {
+	public PrivateDocumentStorageService(
+			@Value("${app.upload.directory}") String directory,
+			StoredResidentDocumentRepository documentRepository) {
+		this.documentRepository = documentRepository;
 		storageDirectory = Path.of(directory).toAbsolutePath().normalize();
 		try {
 			Files.createDirectories(storageDirectory);
@@ -62,25 +65,29 @@ public class PrivateDocumentStorageService {
 
 		String extension = detectExtension(content, documentType);
 		String storageKey = UUID.randomUUID() + "." + extension;
-		Path destination = resolveStoragePath(storageKey);
-		try {
-			Files.write(destination, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-			setPosixPermissions(destination, Set.of(
-					PosixFilePermission.OWNER_READ,
-					PosixFilePermission.OWNER_WRITE));
-		} catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store uploaded file");
-		}
+		MediaType mediaType = mediaTypeFor(storageKey);
+		documentRepository.save(new StoredResidentDocument(storageKey, content, mediaType.toString()));
 		return storageKey;
 	}
 
 	public ResidentDocument load(String storageKey) {
+		validateStorageKey(storageKey);
+		return documentRepository.findById(storageKey)
+				.map(document -> new ResidentDocument(
+						document.getContent(), MediaType.parseMediaType(document.getMediaType())))
+				.orElseGet(() -> loadLegacyFile(storageKey));
+	}
+
+	private ResidentDocument loadLegacyFile(String storageKey) {
 		Path path = resolveStoragePath(storageKey);
 		try {
 			byte[] content = Files.readAllBytes(path);
-			return new ResidentDocument(content, mediaTypeFor(storageKey));
+			MediaType mediaType = mediaTypeFor(storageKey);
+			documentRepository.save(new StoredResidentDocument(storageKey, content, mediaType.toString()));
+			return new ResidentDocument(content, mediaType);
 		} catch (java.nio.file.NoSuchFileException exception) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Resident document not found");
+			throw new ResponseStatusException(
+					HttpStatus.GONE, "The uploaded file is no longer available on this server. Please upload it again.");
 		} catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not read resident document");
 		}
@@ -88,6 +95,7 @@ public class PrivateDocumentStorageService {
 
 	public void delete(String storageKey) {
 		Path path = resolveStoragePath(storageKey);
+		documentRepository.deleteById(storageKey);
 		try {
 			Files.deleteIfExists(path);
 		} catch (IOException exception) {
@@ -96,14 +104,18 @@ public class PrivateDocumentStorageService {
 	}
 
 	private Path resolveStoragePath(String storageKey) {
-		if (storageKey == null || !STORAGE_KEY_PATTERN.matcher(storageKey).matches()) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Resident document not found");
-		}
+		validateStorageKey(storageKey);
 		Path path = storageDirectory.resolve(storageKey).normalize();
 		if (!path.startsWith(storageDirectory)) {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Resident document not found");
 		}
 		return path;
+	}
+
+	private void validateStorageKey(String storageKey) {
+		if (storageKey == null || !STORAGE_KEY_PATTERN.matcher(storageKey).matches()) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Resident document not found");
+		}
 	}
 
 	private String detectExtension(byte[] content, ResidentDocumentType documentType) {
@@ -168,4 +180,5 @@ public class PrivateDocumentStorageService {
 			// Windows uses the storage directory's inherited user-profile ACLs.
 		}
 	}
+
 }
