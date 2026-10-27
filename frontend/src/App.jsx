@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
@@ -167,13 +167,12 @@ function App() {
   const [recoveryForm, setRecoveryForm] = useState({ username: "", whatsappNumber: "", otp: "", newPassword: "" });
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ pgName: "", location: "", whatsappNumber: "", otp: "" });
-  const [residents, setResidents] = useState([]);
   const [allResidents, setAllResidents] = useState([]);
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
-  const [onlyAvailableRooms, setOnlyAvailableRooms] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [emptyBedsOpen, setEmptyBedsOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState("ACTIVE");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -197,6 +196,19 @@ function App() {
       if (documentPreview?.url) URL.revokeObjectURL(documentPreview.url);
     };
   }, [documentPreview]);
+
+  const residents = useMemo(() => {
+    const query = searchText.trim().toLocaleLowerCase();
+    return allResidents.filter((resident) => {
+      const matchesStatus = resident.status === selectedStatus;
+      const matchesQuery = !query || [
+        resident.name,
+        resident.fatherName,
+        resident.roomNumber
+      ].some((value) => value?.toLocaleLowerCase().includes(query));
+      return matchesStatus && matchesQuery;
+    });
+  }, [allResidents, searchText, selectedStatus]);
 
   useEffect(() => {
     if (savedSession) {
@@ -297,25 +309,13 @@ function App() {
     };
   }, [authMode, registrationCredentials, registrationApproved]);
 
-  async function loadResidents(owner, keyword = "", status = "ALL") {
+  async function loadResidents(owner) {
     const allResidents = await request(`${RESIDENTS_API}/all`, owner);
     setAllResidents(allResidents);
-    const query = keyword.trim().toLocaleLowerCase();
-    const data = allResidents.filter((resident) => {
-      const matchesStatus = status === "ALL" || resident.status === status;
-      const matchesQuery = !query || [
-        resident.name,
-        resident.fatherName,
-        resident.roomNumber
-      ].some((value) => value?.toLocaleLowerCase().includes(query));
-      return matchesStatus && matchesQuery;
-    });
-    setResidents(data);
     setResidentTotals({
       active: allResidents.filter((resident) => resident.status === "ACTIVE").length,
       vacated: allResidents.filter((resident) => resident.status === "VACATED").length
     });
-    return data;
   }
 
   async function handleLogin(event) {
@@ -516,10 +516,9 @@ function App() {
     setCredentials(null);
     setAllResidents([]);
     setLoginForm({ username: "", password: "" });
-    setResidents([]);
     setResidentTotals({ active: 0, vacated: 0 });
     setSearchText("");
-    setSelectedStatus("ALL");
+    setSelectedStatus("ACTIVE");
     setForm(emptyForm);
     setEditingId(null);
     setFormOpen(false);
@@ -529,33 +528,15 @@ function App() {
     setDocumentPreview(null);
   }
 
-  async function handleSearch(event) {
+  function handleSearch(event) {
     event.preventDefault();
-    setLoading(true);
-    setError("");
-    setNotice("");
-    try {
-      await loadResidents(credentials, searchText, selectedStatus);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
   }
 
-  async function showResidentsByStatus(status) {
+  function showResidentsByStatus(status) {
     setSelectedStatus(status);
     setSearchText("");
-    setLoading(true);
     setError("");
     setNotice("");
-    try {
-      await loadResidents(credentials, "", status);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
   }
 
   function startCreate() {
@@ -641,7 +622,7 @@ function App() {
         }
       }
 
-      await loadResidents(credentials, searchText, selectedStatus);
+      await loadResidents(credentials);
       setNotice(
         creatingResident
           ? uploadingFiles
@@ -660,7 +641,7 @@ function App() {
     } catch (requestError) {
       if (residentDetailsSaved) {
         try {
-          await loadResidents(credentials, searchText, selectedStatus);
+          await loadResidents(credentials);
         } catch {
           setError(`Resident details were saved, but a follow-up request failed: ${requestError.message}`);
           setLoading(false);
@@ -685,7 +666,7 @@ function App() {
     try {
       await request(`${RESIDENTS_API}/${resident.id}`, credentials, { method: "DELETE" });
       setNotice("Resident marked as vacated successfully. Their history has been preserved.");
-      await loadResidents(credentials, searchText, selectedStatus);
+      await loadResidents(credentials);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -703,7 +684,7 @@ function App() {
     try {
       await request(`${RESIDENTS_API}/${resident.id}/permanent`, credentials, { method: "DELETE" });
       setNotice("Resident and their documents permanently deleted.");
-      await loadResidents(credentials, searchText, selectedStatus);
+      await loadResidents(credentials);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -982,7 +963,6 @@ function App() {
   }
 
   const editingResident = residents.find((resident) => resident.id === editingId) || null;
-  const totalMembers = residentTotals.active + residentTotals.vacated;
   const roomGroups = new Map();
   allResidents.forEach((resident) => {
     const key = resident.roomNumber.trim().toLocaleLowerCase();
@@ -1003,7 +983,7 @@ function App() {
     })
     .filter((room) => room !== null)
     .filter((room) => room.roomNumber.toLocaleLowerCase().includes(roomSearchText.trim().toLocaleLowerCase()))
-    .filter((room) => !onlyAvailableRooms || room.vacant > 0)
+    .filter((room) => room.vacant > 0)
     .sort((first, second) => first.roomNumber.localeCompare(second.roomNumber, undefined, { numeric: true }));
 
   return (
@@ -1027,28 +1007,18 @@ function App() {
             <h1>Resident overview</h1>
             <p className="muted">A clear view of the people who call your PG home.</p>
           </div>
-          <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
+          <div className="page-heading-actions">
+            <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
+            <button className="button button-light" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => setEmptyBedsOpen((open) => !open)}>
+              {emptyBedsOpen ? "Hide empty beds" : "Empty beds"}
+            </button>
+          </div>
         </section>
 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
-        <section className="stats-grid" aria-label="Resident totals">
-          <button className={`stat-card stat-card-button${selectedStatus === "ALL" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ALL"} onClick={() => showResidentsByStatus("ALL")} disabled={loading}>
-            <span className="stat-icon icon-total">⌂</span>
-            <div><p className="stat-label">Total members in PG</p><strong>{totalMembers}</strong></div>
-          </button>
-          <button className={`stat-card stat-card-button${selectedStatus === "ACTIVE" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ACTIVE"} onClick={() => showResidentsByStatus("ACTIVE")} disabled={loading}>
-            <span className="stat-icon icon-active">✓</span>
-            <div><p className="stat-label">Total active members</p><strong>{residentTotals.active}</strong></div>
-          </button>
-          <button className={`stat-card stat-card-button${selectedStatus === "VACATED" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "VACATED"} onClick={() => showResidentsByStatus("VACATED")} disabled={loading}>
-            <span className="stat-icon icon-vacated">↗</span>
-            <div><p className="stat-label">Total vacated members</p><strong>{residentTotals.vacated}</strong></div>
-          </button>
-        </section>
-
-        <section className="room-availability panel" aria-labelledby="room-availability-title">
+        {emptyBedsOpen && <section className="room-availability panel" id="room-availability" aria-labelledby="room-availability-title">
           <div className="room-availability-heading">
             <div>
               <p className="eyebrow">ROOMS</p>
@@ -1061,17 +1031,15 @@ function App() {
               Search by room number
               <input value={roomSearchText} onChange={(event) => setRoomSearchText(event.target.value)} placeholder="e.g. 101" />
             </label>
-            <label className="availability-toggle">
-              <input type="checkbox" checked={onlyAvailableRooms} onChange={(event) => setOnlyAvailableRooms(event.target.checked)} />
-              Show rooms with empty beds only
-            </label>
           </div>
           {roomAvailability.length === 0 ? (
             <p className="room-availability-empty">
-              {allResidents.length === 0
+              {roomSearchText.trim()
+                ? "No rooms with available beds match this search."
+                : allResidents.length === 0
                 ? "Add residents and their room sharing size to track available beds."
                 : allResidents.some((resident) => Number.isInteger(resident.sharing))
-                  ? "No rooms match this search. Try another room number or show all rooms."
+                  ? "There are no available beds in rooms with a configured sharing size."
                   : "Set a sharing size (1–4) while adding or editing a resident to see room availability."}
             </p>
           ) : (
@@ -1087,6 +1055,17 @@ function App() {
               ))}
             </div>
           )}
+        </section>}
+
+        <section className="stats-grid" aria-label="Resident totals">
+          <button className={`stat-card stat-card-button${selectedStatus === "ACTIVE" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ACTIVE"} onClick={() => showResidentsByStatus("ACTIVE")} disabled={loading}>
+            <span className="stat-icon icon-active">✓</span>
+            <div><p className="stat-label">Total active members</p><strong>{residentTotals.active}</strong></div>
+          </button>
+          <button className={`stat-card stat-card-button${selectedStatus === "VACATED" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "VACATED"} onClick={() => showResidentsByStatus("VACATED")} disabled={loading}>
+            <span className="stat-icon icon-vacated">↗</span>
+            <div><p className="stat-label">Total vacated members</p><strong>{residentTotals.vacated}</strong></div>
+          </button>
         </section>
 
         <section className="workspace">
@@ -1094,7 +1073,7 @@ function App() {
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">DIRECTORY</p>
-                <h2>{searchText.trim() ? "Search results" : selectedStatus === "ALL" ? "All members" : selectedStatus === "ACTIVE" ? "Active members" : "Vacated members"} <span className="count-pill">{residents.length}</span></h2>
+                <h2>{searchText.trim() ? "Search results" : selectedStatus === "ACTIVE" ? "Active members" : "Vacated members"} <span className="count-pill">{residents.length}</span></h2>
               </div>
               <div className="directory-actions">
                 <form className="search-form" onSubmit={handleSearch}>
@@ -1156,6 +1135,38 @@ function App() {
                             <span className="avatar">{resident.name.trim().charAt(0).toUpperCase()}</span>
                             <span><strong>{resident.name}</strong><small>Father: {resident.fatherName}</small></span>
                           </div>
+                          <div className="mobile-resident-summary">
+                            <span>Room {resident.roomNumber} · {resident.sharing ? sharingLabel(resident.sharing) : "sharing not set"}</span>
+                            <span>{resident.mobileNumber || "Mobile not added"}</span>
+                          </div>
+                          <details className="mobile-resident-details">
+                            <summary>All details</summary>
+                            <div className="mobile-resident-full-details">
+                              <div><span>Mobile</span><strong>{resident.mobileNumber || "—"}</strong></div>
+                              <div><span>Father</span><strong>{resident.fatherName}</strong></div>
+                              <div><span>Rent / month</span><strong>₹{Number(resident.rent).toLocaleString("en-IN")}</strong></div>
+                              <div><span>Advance</span><strong>₹{Number(resident.advanceAmount).toLocaleString("en-IN")}</strong></div>
+                              <div><span>Joined</span><strong>{resident.joiningDate}</strong></div>
+                              <div><span>Status</span><strong>{resident.status === "ACTIVE" ? "Active" : "Vacated"}</strong></div>
+                              <div><span>Vacated date</span><strong>{resident.vacatedDate || "—"}</strong></div>
+                              <div><span>Permanent address</span><strong>{resident.permanentAddress}</strong></div>
+                              <div><span>Company address</span><strong>{resident.companyAddress}</strong></div>
+                              <div className="details-documents">
+                                {resident.hasPhoto
+                                  ? <button className="text-action" onClick={() => viewDocument(resident, "photo")}>View photo</button>
+                                  : <span className="missing-document">No photo</span>}
+                                {resident.hasIdentityProof
+                                  ? <button className="text-action" onClick={() => viewDocument(resident, "identity-proof")}>View proof</button>
+                                  : <span className="missing-document">No proof</span>}
+                              </div>
+                              <div className="row-actions">
+                                <button className="text-action" onClick={() => openRentPayments(resident)}>Rent history</button>
+                                <button className="text-action" onClick={() => startEdit(resident)}>Edit</button>
+                                {resident.status === "ACTIVE" && <button className="text-action text-danger" onClick={() => markVacated(resident)}>Vacate</button>}
+                                <button className="text-action text-danger" onClick={() => permanentlyDeleteResident(resident)} disabled={loading}>Delete permanently</button>
+                              </div>
+                            </div>
+                          </details>
                         </td>
                         <td data-label="Mobile">{resident.mobileNumber || "—"}</td>
                         <td data-label="Room / sharing"><span className="room-tag">{resident.roomNumber} · {resident.sharing ? sharingLabel(resident.sharing) : "sharing not set"}</span></td>
