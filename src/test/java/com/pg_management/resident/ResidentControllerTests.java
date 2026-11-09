@@ -62,6 +62,9 @@ class ResidentControllerTests {
 	private RentPaymentService rentPaymentService;
 
 	@MockitoBean
+	private RoomService roomService;
+
+	@MockitoBean
 	private OwnerUserDetailsService ownerUserDetailsService;
 
 	@MockitoBean
@@ -108,6 +111,32 @@ class ResidentControllerTests {
 				.andExpect(status().isCreated())
 				.andExpect(header().string("Location", "/api/residents/7"))
 				.andExpect(jsonPath("$.status").value("ACTIVE"))
+				.andExpect(jsonPath("$.sharing").value(2));
+	}
+
+	@Test
+	void ownerCanListConfiguredRooms() throws Exception {
+		when(roomService.findAll(any(OwnerAccount.class))).thenReturn(List.of(new RoomResponse("101", 2)));
+
+		mockMvc.perform(get("/api/residents/rooms").header("Authorization", AUTHORIZATION))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].roomNumber").value("101"))
+				.andExpect(jsonPath("$[0].sharing").value(2));
+	}
+
+	@Test
+	void ownerCanAddRoomWithSharingCapacity() throws Exception {
+		when(roomService.add(any(OwnerAccount.class), any(RoomRequest.class)))
+				.thenReturn(new RoomResponse("101", 2));
+
+		mockMvc.perform(post("/api/residents/rooms")
+						.header("Authorization", AUTHORIZATION)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"roomNumber":"101","sharing":2}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.roomNumber").value("101"))
 				.andExpect(jsonPath("$.sharing").value(2));
 	}
 

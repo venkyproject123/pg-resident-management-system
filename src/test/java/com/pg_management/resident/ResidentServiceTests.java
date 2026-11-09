@@ -32,6 +32,9 @@ class ResidentServiceTests {
 	private ResidentRepository residentRepository;
 
 	@Mock
+	private OwnerRoomRepository ownerRoomRepository;
+
+	@Mock
 	private RentPaymentRepository rentPaymentRepository;
 
 	@Mock
@@ -89,6 +92,22 @@ class ResidentServiceTests {
 				ResponseStatusException.class, () -> residentService.create(request, owner));
 
 		assertEquals("All residents in a room must use the same sharing capacity", exception.getReason());
+		verify(residentRepository, never()).save(org.mockito.ArgumentMatchers.any(Resident.class));
+	}
+
+	@Test
+	void createRejectsSharingThatDoesNotMatchConfiguredRoom() {
+		when(ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(3L, "101"))
+				.thenReturn(Optional.of(new OwnerRoom(owner, "101", 2)));
+		CreateResidentRequest request = new CreateResidentRequest(
+				"New Resident", "Father", "+919876543211", "101", 3,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
+				"Address", "Company");
+
+		ResponseStatusException exception = assertThrows(
+				ResponseStatusException.class, () -> residentService.create(request, owner));
+
+		assertEquals("Resident sharing must match the room's configured sharing capacity", exception.getReason());
 		verify(residentRepository, never()).save(org.mockito.ArgumentMatchers.any(Resident.class));
 	}
 

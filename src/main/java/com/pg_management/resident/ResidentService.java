@@ -29,14 +29,17 @@ public class ResidentService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ResidentService.class);
 
 	private final ResidentRepository residentRepository;
+	private final OwnerRoomRepository ownerRoomRepository;
 	private final RentPaymentRepository rentPaymentRepository;
 	private final PrivateDocumentStorageService documentStorage;
 
 	public ResidentService(
 			ResidentRepository residentRepository,
+			OwnerRoomRepository ownerRoomRepository,
 			RentPaymentRepository rentPaymentRepository,
 			PrivateDocumentStorageService documentStorage) {
 		this.residentRepository = residentRepository;
+		this.ownerRoomRepository = ownerRoomRepository;
 		this.rentPaymentRepository = rentPaymentRepository;
 		this.documentStorage = documentStorage;
 	}
@@ -131,6 +134,12 @@ public class ResidentService {
 
 	private void validateRoomCapacity(
 			OwnerAccount owner, String roomNumber, Integer sharing, Long currentResidentId, boolean currentlyActive) {
+		ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(owner.getId(), roomNumber)
+				.filter(room -> room.getSharing() != sharing)
+				.ifPresent(room -> {
+					throw new ResponseStatusException(
+							HttpStatus.CONFLICT, "Resident sharing must match the room's configured sharing capacity");
+				});
 		List<Resident> roomResidents = residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(
 				owner.getId(), roomNumber);
 		long activeResidents = 0;

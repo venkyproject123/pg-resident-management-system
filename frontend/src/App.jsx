@@ -163,6 +163,8 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ username: "", pgName: "", location: "" });
   const [allResidents, setAllResidents] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [roomForm, setRoomForm] = useState({ roomNumber: "", sharing: "" });
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
@@ -192,6 +194,12 @@ function App() {
       if (documentPreview?.url) URL.revokeObjectURL(documentPreview.url);
     };
   }, [documentPreview]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeoutId = window.setTimeout(() => setNotice(""), 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
 
   const residents = useMemo(() => {
     const query = searchText.trim().toLocaleLowerCase();
@@ -304,8 +312,12 @@ function App() {
   }, [authMode, registrationCredentials, registrationApproved]);
 
   async function loadResidents(owner) {
-    const allResidents = await request(`${RESIDENTS_API}/all`, owner);
+    const [allResidents, rooms] = await Promise.all([
+      request(`${RESIDENTS_API}/all`, owner),
+      request(`${RESIDENTS_API}/rooms`, owner)
+    ]);
     setAllResidents(allResidents);
+    setRooms(rooms);
     setResidentTotals({
       active: allResidents.filter((resident) => resident.status === "ACTIVE").length,
       vacated: allResidents.filter((resident) => resident.status === "VACATED").length
@@ -462,6 +474,8 @@ function App() {
     sessionStorage.removeItem("haven-auth-session");
     setCredentials(null);
     setAllResidents([]);
+    setRooms([]);
+    setRoomForm({ roomNumber: "", sharing: "" });
     setLoginForm({ username: "", password: "" });
     setResidentTotals({ active: 0, vacated: 0 });
     setProfileForm({ username: "", pgName: "", location: "" });
@@ -478,6 +492,26 @@ function App() {
 
   function handleSearch(event) {
     event.preventDefault();
+  }
+
+  async function addRoom(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const room = await request(`${RESIDENTS_API}/rooms`, credentials, {
+        method: "POST",
+        body: JSON.stringify({ ...roomForm, sharing: Number(roomForm.sharing) })
+      });
+      setRooms((currentRooms) => [...currentRooms, room]);
+      setRoomForm({ roomNumber: "", sharing: "" });
+      setNotice(`Room ${room.roomNumber} added.`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function showResidentsByStatus(status) {
@@ -917,18 +951,30 @@ function App() {
 
   const editingResident = residents.find((resident) => resident.id === editingId) || null;
   const roomGroups = new Map();
+  rooms.forEach((room) => {
+    const key = room.roomNumber.trim().toLocaleLowerCase();
+    roomGroups.set(key, { roomNumber: room.roomNumber, capacity: room.sharing, residents: [] });
+  });
   allResidents.forEach((resident) => {
     const key = resident.roomNumber.trim().toLocaleLowerCase();
-    if (!roomGroups.has(key)) roomGroups.set(key, []);
-    roomGroups.get(key).push(resident);
+    if (!roomGroups.has(key)) {
+      roomGroups.set(key, {
+        roomNumber: resident.roomNumber,
+        capacity: Number.isInteger(resident.sharing) ? resident.sharing : null,
+        residents: []
+      });
+    }
+    const room = roomGroups.get(key);
+    if (!room.capacity && Number.isInteger(resident.sharing)) room.capacity = resident.sharing;
+    room.residents.push(resident);
   });
   const roomAvailability = Array.from(roomGroups.values())
-    .map((roomResidents) => {
-      const capacity = roomResidents.find((resident) => Number.isInteger(resident.sharing))?.sharing;
+    .map((room) => {
+      const capacity = room.capacity;
       if (!capacity) return null;
-      const occupied = roomResidents.filter((resident) => resident.status === "ACTIVE").length;
+      const occupied = room.residents.filter((resident) => resident.status === "ACTIVE").length;
       return {
-        roomNumber: roomResidents[0].roomNumber,
+        roomNumber: room.roomNumber,
         capacity,
         occupied,
         vacant: Math.max(capacity - occupied, 0)
@@ -976,10 +1022,32 @@ function App() {
             <div>
               <p className="eyebrow">ROOMS</p>
               <h2 id="room-availability-title">Available beds</h2>
-              <p className="muted">Capacity is calculated from each room’s sharing size and active residents.</p>
             </div>
           </div>
           <div className="room-availability-filters">
+            <form className="room-add-form" onSubmit={addRoom}>
+              <label>
+                Room number
+                <input
+                  maxLength="30"
+                  required
+                  value={roomForm.roomNumber}
+                  onChange={(event) => setRoomForm({ ...roomForm, roomNumber: event.target.value })}
+                  placeholder="e.g. 101"
+                />
+              </label>
+              <label>
+                Sharing capacity
+                <select required value={roomForm.sharing} onChange={(event) => setRoomForm({ ...roomForm, sharing: event.target.value })}>
+                  <option value="">Select sharing</option>
+                  <option value="1">Single sharing</option>
+                  <option value="2">2 sharing</option>
+                  <option value="3">3 sharing</option>
+                  <option value="4">4 sharing</option>
+                </select>
+              </label>
+              <button className="button button-primary" type="submit" disabled={loading}>{loading ? "Adding…" : "Add room"}</button>
+            </form>
             <label className="room-search">
               Search by room number
               <input value={roomSearchText} onChange={(event) => setRoomSearchText(event.target.value)} placeholder="e.g. 101" />
@@ -989,27 +1057,23 @@ function App() {
             <p className="room-availability-empty">
               {roomSearchText.trim()
                 ? "No rooms with available beds match this search."
-                : allResidents.length === 0
-                ? "Add residents and their room sharing size to track available beds."
-                : allResidents.some((resident) => Number.isInteger(resident.sharing))
-                  ? "There are no available beds in rooms with a configured sharing size."
-                  : "Set a sharing size (1–4) while adding or editing a resident to see room availability."}
+                : "No available beds found. Add rooms with their sharing capacity to track vacancies."}
             </p>
           ) : (
             <div className="room-availability-grid">
               {roomAvailability.map((room) => (
                 <article className={`room-availability-card${room.vacant > 0 ? " room-has-vacancy" : ""}`} key={room.roomNumber.toLocaleLowerCase()}>
                   <div className="room-card-heading">
-                    <strong>Room {room.roomNumber}</strong>
-                    <span>{room.vacant > 0 ? `${room.vacant} bed${room.vacant === 1 ? "" : "s"} available` : "Full"}</span>
+                    <strong>Room {room.roomNumber} ({sharingLabel(room.capacity)})</strong>
                   </div>
-                  <p>{room.occupied} of {room.capacity} beds occupied</p>
+                  <p>Available beds: {room.vacant}</p>
                 </article>
               ))}
             </div>
           )}
         </section>}
 
+        {!emptyBedsOpen && <>
         <section className="stats-grid" aria-label="Resident totals">
           <button className={`stat-card stat-card-button${selectedStatus === "ACTIVE" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ACTIVE"} onClick={() => showResidentsByStatus("ACTIVE")} disabled={loading}>
             <span className="stat-icon icon-active">✓</span>
@@ -1154,6 +1218,7 @@ function App() {
           </article>
 
         </section>
+        </>}
 
         {rentPaymentResident && (
           <div className="dialog-backdrop" onClick={() => setRentPaymentResident(null)}>

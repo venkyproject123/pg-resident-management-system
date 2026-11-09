@@ -41,14 +41,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class ResidentController {
 
 	private final ResidentService residentService;
+	private final RoomService roomService;
 	private final RentPaymentService rentPaymentService;
 	private final OwnerAccountRepository ownerAccountRepository;
 
 	public ResidentController(
 			ResidentService residentService,
+			RoomService roomService,
 			RentPaymentService rentPaymentService,
 			OwnerAccountRepository ownerAccountRepository) {
 		this.residentService = residentService;
+		this.roomService = roomService;
 		this.rentPaymentService = rentPaymentService;
 		this.ownerAccountRepository = ownerAccountRepository;
 	}
@@ -69,6 +72,18 @@ public class ResidentController {
 	@GetMapping("/all")
 	public List<ResidentResponse> findAllMembers(Authentication authentication) {
 		return residentService.findAllMembers(owner(authentication));
+	}
+
+	@GetMapping("/rooms")
+	public List<RoomResponse> findRooms(Authentication authentication) {
+		return roomService.findAll(owner(authentication));
+	}
+
+	@PostMapping("/rooms")
+	public ResponseEntity<RoomResponse> addRoom(
+			Authentication authentication, @Valid @RequestBody RoomRequest request) {
+		RoomResponse room = roomService.add(owner(authentication), request);
+		return ResponseEntity.created(URI.create("/api/residents/rooms")).body(room);
 	}
 
 	@GetMapping("/status/{status}")
