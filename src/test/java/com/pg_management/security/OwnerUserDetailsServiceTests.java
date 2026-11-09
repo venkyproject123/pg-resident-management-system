@@ -1,6 +1,7 @@
 package com.pg_management.security;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +32,7 @@ class OwnerUserDetailsServiceTests {
 
 		assertFalse(owner.isEnabled());
 		assertTrue(owner.getAuthorities().stream().anyMatch(authority -> authority.getAuthority().equals("ROLE_OWNER")));
+		assertSame(pending, ((OwnerPrincipal) owner).getOwner());
 	}
 
 	@Test

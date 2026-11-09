@@ -3,7 +3,6 @@ package com.pg_management.resident.storage;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 @Entity
@@ -14,8 +13,7 @@ public class StoredResidentDocument {
 	@Column(name = "storage_key", length = 50)
 	private String storageKey;
 
-	@Lob
-	@Column(nullable = false)
+	@Column(nullable = false, columnDefinition = "MEDIUMBLOB")
 	private byte[] content;
 
 	@Column(name = "media_type", nullable = false, length = 100)

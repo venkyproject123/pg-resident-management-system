@@ -533,6 +533,7 @@ function App() {
     const creatingResident = editingId === null;
     const uploadingFiles = Boolean(photoFile || identityProofFile);
     let residentDetailsSaved = false;
+    let failedStep = "saving resident details";
     try {
       if (residentId === null) {
         const createdResident = await request(`${RESIDENTS_API}/post`, credentials, {
@@ -551,6 +552,7 @@ function App() {
 
       for (const [type, file] of [["photo", photoFile], ["identity-proof", identityProofFile]]) {
         if (!file) continue;
+        failedStep = type === "photo" ? "uploading the resident photo" : "uploading the identity proof";
         if (file.size > 5 * 1024 * 1024) {
           throw new Error("Choose files smaller than 5 MB.");
         }
@@ -569,6 +571,7 @@ function App() {
         }
       }
 
+      failedStep = "refreshing the resident list";
       await loadResidents(credentials);
       setNotice(
         creatingResident
@@ -587,14 +590,16 @@ function App() {
       setDocumentPreview(null);
     } catch (requestError) {
       if (residentDetailsSaved) {
+        let refreshError = null;
         try {
           await loadResidents(credentials);
-        } catch {
-          setError(`Resident details were saved, but a follow-up request failed: ${requestError.message}`);
-          setLoading(false);
-          return;
+        } catch (followUpError) {
+          refreshError = followUpError;
         }
-        setError(`Resident details were saved, but a file or follow-up request failed: ${requestError.message}`);
+        const message = failedStep === "refreshing the resident list"
+          ? `Resident details and uploaded files were saved, but refreshing the resident list failed: ${requestError.message}`
+          : `Resident details were saved, but ${failedStep} failed: ${requestError.message}`;
+        setError(refreshError ? `${message} The resident list could not be refreshed: ${refreshError.message}` : message);
       } else {
         setError(requestError.message);
       }
@@ -707,7 +712,14 @@ function App() {
         if (response.status === 401) throw new Error("Your sign-in is no longer valid. Sign out and sign in again.");
         if (response.status === 404) throw new Error("This resident does not have that file uploaded yet.");
         if (response.status === 410) throw new Error("The file was uploaded before but is no longer available on the server. Please edit the resident and upload it again.");
-        throw new Error(`Could not open document (${response.status}).`);
+        let detail = "";
+        try {
+          const errorBody = await response.json();
+          detail = errorBody.detail || errorBody.message || "";
+        } catch {
+          detail = "";
+        }
+        throw new Error(detail || `Could not open document (${response.status}).`);
       }
       const blob = await response.blob();
       const preview = { url: URL.createObjectURL(blob), contentType: blob.type, title: documentName };

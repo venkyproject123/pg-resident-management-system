@@ -38,10 +38,6 @@ public class OwnerUserDetailsService implements UserDetailsService {
 		}
 		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
 				.orElseThrow(() -> new UsernameNotFoundException("Owner account not found"));
-		return User.withUsername(owner.getUsername())
-				.password(owner.getPasswordHash())
-				.roles("OWNER")
-				.disabled(!owner.isApproved())
-				.build();
+		return new OwnerPrincipal(owner);
 	}
 }

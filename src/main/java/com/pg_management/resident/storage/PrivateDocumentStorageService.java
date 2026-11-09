@@ -66,7 +66,7 @@ public class PrivateDocumentStorageService {
 		String extension = detectExtension(content, documentType);
 		String storageKey = UUID.randomUUID() + "." + extension;
 		MediaType mediaType = mediaTypeFor(storageKey);
-		documentRepository.save(new StoredResidentDocument(storageKey, content, mediaType.toString()));
+		documentRepository.saveAndFlush(new StoredResidentDocument(storageKey, content, mediaType.toString()));
 		return storageKey;
 	}
 
@@ -83,7 +83,7 @@ public class PrivateDocumentStorageService {
 		try {
 			byte[] content = Files.readAllBytes(path);
 			MediaType mediaType = mediaTypeFor(storageKey);
-			documentRepository.save(new StoredResidentDocument(storageKey, content, mediaType.toString()));
+			documentRepository.saveAndFlush(new StoredResidentDocument(storageKey, content, mediaType.toString()));
 			return new ResidentDocument(content, mediaType);
 		} catch (java.nio.file.NoSuchFileException exception) {
 			throw new ResponseStatusException(

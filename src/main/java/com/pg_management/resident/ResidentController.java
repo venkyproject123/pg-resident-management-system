@@ -29,6 +29,7 @@ import com.pg_management.resident.dto.RentPaymentResponse;
 import com.pg_management.resident.storage.ResidentDocument;
 import com.pg_management.security.OwnerAccount;
 import com.pg_management.security.OwnerAccountRepository;
+import com.pg_management.security.OwnerPrincipal;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -151,6 +152,9 @@ public class ResidentController {
 	}
 
 	private OwnerAccount owner(Authentication authentication) {
+		if (authentication.getPrincipal() instanceof OwnerPrincipal ownerPrincipal) {
+			return ownerPrincipal.getOwner();
+		}
 		return ownerAccountRepository.findByUsername(authentication.getName())
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
 	}

@@ -28,7 +28,7 @@ class PrivateDocumentStorageServiceTests {
 	@Test
 	void storesAndLoadsPdfWithGeneratedPrivateKey() throws Exception {
 		StoredResidentDocumentRepository repository = mock(StoredResidentDocumentRepository.class);
-		when(repository.save(any(StoredResidentDocument.class)))
+		when(repository.saveAndFlush(any(StoredResidentDocument.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
 		PrivateDocumentStorageService storage =
 				new PrivateDocumentStorageService(temporaryDirectory.toString(), repository);
@@ -38,7 +38,7 @@ class PrivateDocumentStorageServiceTests {
 				new MockMultipartFile("file", "identity.pdf", "application/pdf", pdfBytes),
 				ResidentDocumentType.IDENTITY_PROOF);
 		ArgumentCaptor<StoredResidentDocument> storedDocument = ArgumentCaptor.forClass(StoredResidentDocument.class);
-		verify(repository).save(storedDocument.capture());
+		verify(repository).saveAndFlush(storedDocument.capture());
 		when(repository.findById(storageKey)).thenReturn(Optional.of(storedDocument.getValue()));
 		ResidentDocument document = storage.load(storageKey);
 
@@ -90,7 +90,7 @@ class PrivateDocumentStorageServiceTests {
 
 		assertArrayEquals(imageBytes, document.content());
 		assertEquals("image/jpeg", document.mediaType().toString());
-		verify(repository).save(any(StoredResidentDocument.class));
+		verify(repository).saveAndFlush(any(StoredResidentDocument.class));
 	}
 
 	@Test
