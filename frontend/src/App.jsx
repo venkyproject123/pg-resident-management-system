@@ -984,6 +984,11 @@ function App() {
     .filter((room) => room.roomNumber.toLocaleLowerCase().includes(roomSearchText.trim().toLocaleLowerCase()))
     .filter((room) => room.vacant > 0)
     .sort((first, second) => first.roomNumber.localeCompare(second.roomNumber, undefined, { numeric: true }));
+  const totalEmptyBeds = Array.from(roomGroups.values()).reduce((total, room) => {
+    if (!Number.isInteger(room.capacity)) return total;
+    const occupied = room.residents.filter((resident) => resident.status === "ACTIVE").length;
+    return total + Math.max(room.capacity - occupied, 0);
+  }, 0);
 
   return (
     <main className="dashboard">
@@ -1009,7 +1014,7 @@ function App() {
           <div className="page-heading-actions">
             <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
             <button className="button button-light" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => setEmptyBedsOpen((open) => !open)}>
-              {emptyBedsOpen ? "Hide empty beds" : "Empty beds"}
+              {emptyBedsOpen ? "Hide rooms/beds" : "Manage rooms/beds"}
             </button>
           </div>
         </section>
@@ -1021,8 +1026,12 @@ function App() {
           <div className="room-availability-heading">
             <div>
               <p className="eyebrow">ROOMS</p>
-              <h2 id="room-availability-title">Available beds</h2>
+              <h2 id="room-availability-title">Manage rooms/beds</h2>
             </div>
+          </div>
+          <div className="total-beds-summary">
+            <span>Total empty beds</span>
+            <strong>{totalEmptyBeds}</strong>
           </div>
           <div className="room-availability-filters">
             <form className="room-add-form" onSubmit={addRoom}>
@@ -1049,7 +1058,7 @@ function App() {
               <button className="button button-primary" type="submit" disabled={loading}>{loading ? "Adding…" : "Add room"}</button>
             </form>
             <label className="room-search">
-              Search by room number
+              Search rooms
               <input value={roomSearchText} onChange={(event) => setRoomSearchText(event.target.value)} placeholder="e.g. 101" />
             </label>
           </div>
