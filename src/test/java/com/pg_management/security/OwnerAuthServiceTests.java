@@ -46,7 +46,7 @@ class OwnerAuthServiceTests {
 	@Test
 	void registrationCreatesAnUnapprovedOwnerWithoutOtp() {
 		when(ownerAccountRepository.findByUsername("new-owner")).thenReturn(Optional.empty());
-		when(ownerAccountRepository.findByWhatsappNumber("+919876543210")).thenReturn(Optional.empty());
+		when(ownerAccountRepository.findByMobileNumber("+919876543210")).thenReturn(Optional.empty());
 		when(ownerAccountRepository.saveAndFlush(any(OwnerAccount.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -57,7 +57,7 @@ class OwnerAuthServiceTests {
 		verify(ownerAccountRepository).saveAndFlush(owner.capture());
 		assertFalse(owner.getValue().isApproved());
 		assertTrue(passwordEncoder.matches("long-password-here", owner.getValue().getPasswordHash()));
-		assertEquals("+919876543210", owner.getValue().getWhatsappNumber());
+		assertEquals("+919876543210", owner.getValue().getMobileNumber());
 		assertEquals("Madhapur, Hyderabad", owner.getValue().getLocation());
 		verify(jdbcTemplate, org.mockito.Mockito.never()).update(any(String.class), any(Object.class));
 	}

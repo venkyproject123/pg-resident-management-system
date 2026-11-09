@@ -33,6 +33,7 @@ a { color: inherit; text-decoration: none; }
 .alert { margin: 0 0 18px; padding: 12px 15px; border-radius: 9px; font-size: 13px; }
 .alert-error { border: 1px solid #f1c7c2; background: #fff4f2; color: #a53c31; }
 .alert-success { border: 1px solid #cce6d5; background: #eff9f2; color: #28734c; }
+.alert-centered { position: fixed; z-index: 20; top: 50%; left: 50%; width: min(520px, calc(100vw - 32px)); margin: 0; padding: 18px 22px; transform: translate(-50%, -50%); border-radius: 14px; box-shadow: 0 16px 54px #10231d38; text-align: center; font-size: 15px; line-height: 1.5; }
 
 .login-shell { display: grid; grid-template-columns: minmax(400px, 1fr) minmax(420px, 1fr); min-height: 100vh; background: #fff; }
 .login-card { display: flex; flex-direction: column; justify-content: center; width: min(380px, calc(100% - 48px)); margin: auto; padding: 55px 0; }
@@ -252,6 +253,7 @@ td { height: 60px; padding: 7px 12px; border-top: 1px solid #f0f2ef; color: #687
 .document-viewer .panel-heading h2 { font-size: 17px; }
 .document-viewer .muted { margin: 7px 0 0; font-size: 11px; }
 .document-viewer .document-preview { margin-top: 0; }
+.document-message { display: grid; min-height: 160px; align-content: center; justify-items: center; margin: 18px; text-align: center; font-size: 15px; line-height: 1.55; }
 
 body { min-width: 320px; }
 .button { min-height: 46px; padding: 0 17px; font-size: 14px; }

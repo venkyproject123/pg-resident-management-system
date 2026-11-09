@@ -48,7 +48,7 @@ public class OwnerAuthService {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already registered");
 		}
 		String normalizedNumber = mobileNumber.matches("[6-9][0-9]{9}") ? "+91" + mobileNumber : mobileNumber;
-		if (ownerAccountRepository.findByWhatsappNumber(normalizedNumber).isPresent()) {
+		if (ownerAccountRepository.findByMobileNumber(normalizedNumber).isPresent()) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "That mobile number is already registered");
 		}
 		ownerAccountRepository.saveAndFlush(new OwnerAccount(
@@ -59,7 +59,7 @@ public class OwnerAuthService {
 	public List<OwnerSummary> findPendingOwners() {
 		return ownerAccountRepository.findAllByApprovedFalseOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
-						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber(),
+						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getMobileNumber(),
 						owner.getLocation()))
 				.toList();
 	}
@@ -68,7 +68,7 @@ public class OwnerAuthService {
 	public List<OwnerSummary> findApprovedOwners() {
 		return ownerAccountRepository.findAllByApprovedTrueOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
-						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getWhatsappNumber(),
+						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getMobileNumber(),
 						owner.getLocation()))
 				.toList();
 	}
@@ -96,8 +96,7 @@ public class OwnerAuthService {
 	public OwnerProfile getProfile(String username) {
 		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
-		return new OwnerProfile(
-				owner.getUsername(), owner.getPgName(), owner.getLocation(), owner.getWhatsappNumber());
+		return new OwnerProfile(owner.getUsername(), owner.getPgName(), owner.getLocation());
 	}
 
 	public void updateProfile(String username, ProfileUpdateRequest request) {
@@ -118,7 +117,7 @@ public class OwnerAuthService {
 		ownerAccountRepository.save(owner);
 	}
 
-	public record OwnerProfile(String username, String pgName, String location, String whatsappNumber) {
+	public record OwnerProfile(String username, String pgName, String location) {
 	}
 
 	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber, String location) {

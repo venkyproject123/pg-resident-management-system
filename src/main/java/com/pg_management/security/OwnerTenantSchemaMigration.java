@@ -19,21 +19,7 @@ public class OwnerTenantSchemaMigration implements ApplicationRunner {
 
 	@Override
 	public void run(ApplicationArguments args) {
-		if (hasColumn("owner_accounts", "mobile_number")) {
-			List<String> uniqueIndexes = jdbcTemplate.queryForList("""
-					SELECT DISTINCT INDEX_NAME
-					FROM information_schema.statistics
-					WHERE TABLE_SCHEMA = DATABASE()
-					  AND TABLE_NAME = 'owner_accounts'
-					  AND COLUMN_NAME = 'mobile_number'
-					  AND NON_UNIQUE = 0
-					  AND INDEX_NAME <> 'PRIMARY'
-					""", String.class);
-			for (String index : uniqueIndexes) {
-				jdbcTemplate.execute("ALTER TABLE owner_accounts DROP INDEX `" + index.replace("`", "``") + "`");
-			}
-			jdbcTemplate.execute("ALTER TABLE owner_accounts MODIFY COLUMN mobile_number VARCHAR(16) NULL");
-		}
+		migrateLegacyOwnerContactColumns();
 		if (hasColumn("residents", "owner_id")) {
 			jdbcTemplate.update("""
 					UPDATE residents resident
@@ -45,15 +31,29 @@ public class OwnerTenantSchemaMigration implements ApplicationRunner {
 		if (hasColumn("owner_accounts", "pg_name")) {
 			jdbcTemplate.update("UPDATE owner_accounts SET pg_name = 'PG' WHERE pg_name IS NULL OR pg_name = ''");
 		}
-		if (hasColumn("owner_accounts", "mobile_number") && hasColumn("owner_accounts", "whatsapp_number")) {
+		migrateResidentDocumentContentColumn();
+	}
+
+	private void migrateLegacyOwnerContactColumns() {
+		boolean hasMobileNumber = hasColumn("owner_accounts", "mobile_number");
+		boolean hasLegacyNumber = hasColumn("owner_accounts", "whatsapp_number");
+		if (!hasMobileNumber && hasLegacyNumber) {
+			jdbcTemplate.execute("ALTER TABLE owner_accounts ADD COLUMN mobile_number VARCHAR(20) NULL");
+			hasMobileNumber = true;
+		}
+		if (hasMobileNumber && hasLegacyNumber) {
 			jdbcTemplate.update("""
 					UPDATE owner_accounts
-					SET whatsapp_number = mobile_number
-					WHERE (whatsapp_number IS NULL OR whatsapp_number = '')
-					  AND mobile_number REGEXP '^\\\\+[1-9][0-9]{7,14}$'
+					SET mobile_number = whatsapp_number
+					WHERE mobile_number IS NULL OR mobile_number = ''
 					""");
 		}
-		migrateResidentDocumentContentColumn();
+		if (hasLegacyNumber) {
+			jdbcTemplate.execute("ALTER TABLE owner_accounts DROP COLUMN whatsapp_number");
+		}
+		if (hasColumn("owner_accounts", "whatsapp_verified")) {
+			jdbcTemplate.execute("ALTER TABLE owner_accounts DROP COLUMN whatsapp_verified");
+		}
 	}
 
 	private void migrateResidentDocumentContentColumn() {

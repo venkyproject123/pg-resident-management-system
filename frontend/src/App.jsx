@@ -178,6 +178,7 @@ function App() {
   const [photoFile, setPhotoFile] = useState(null);
   const [identityProofFile, setIdentityProofFile] = useState(null);
   const [documentPreview, setDocumentPreview] = useState(null);
+  const [documentError, setDocumentError] = useState("");
   const [viewerResident, setViewerResident] = useState(null);
   const [rentPaymentResident, setRentPaymentResident] = useState(null);
   const [rentPaymentYear, setRentPaymentYear] = useState(new Date().getFullYear());
@@ -515,6 +516,7 @@ function App() {
     setPhotoFile(null);
     setIdentityProofFile(null);
     setDocumentPreview(null);
+    setDocumentError("");
     setError("");
   }
 
@@ -701,7 +703,9 @@ function App() {
   async function viewDocument(resident, documentType) {
     setLoading(true);
     setError("");
-    if (formOpen) setDocumentPreview(null);
+    setDocumentError("");
+    setDocumentPreview(null);
+    if (!formOpen) setViewerResident(resident);
     const documentName = documentType === "photo" ? "Resident photo" : "Identity proof";
     try {
       const response = await fetch(
@@ -730,7 +734,7 @@ function App() {
         setDocumentPreview(preview);
       }
     } catch (requestError) {
-      setError(requestError.message);
+      setDocumentError(requestError.message);
     } finally {
       setLoading(false);
     }
@@ -774,7 +778,7 @@ function App() {
               <button type="button" className="button button-light" disabled={loading} onClick={handleAdminRefresh}>{loading ? "Refreshing..." : "Refresh owners"}</button>
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
-            {notice && <div className="alert alert-success" role="status">{notice}</div>}
+            {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
             <div className="admin-total-card">
               <span>Total registered owners</span>
               <strong>{pendingOwners.length + approvedOwners.length}</strong>
@@ -842,7 +846,7 @@ function App() {
             setNotice("");
           }}>Go to sign in</button>}
           {error && <div className="alert alert-error" role="alert">{error}</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
           {authMode === "LOGIN" && <form className="stack-form" onSubmit={handleLogin}>
             <label>
               Username
@@ -965,7 +969,7 @@ function App() {
         </section>
 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
-        {notice && <div className="alert alert-success" role="status">{notice}</div>}
+        {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
 
         {emptyBedsOpen && <section className="room-availability panel" id="room-availability" aria-labelledby="room-availability-title">
           <div className="room-availability-heading">
@@ -1163,7 +1167,6 @@ function App() {
                 <button className="icon-button" onClick={() => setRentPaymentResident(null)} aria-label="Close rent history">×</button>
               </div>
               {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
-              {notice && <div className="alert alert-success dialog-alert" role="status">{notice}</div>}
               <div className="rent-year-selector">
                 <button className="button button-light" disabled={loading || rentPaymentYear <= Number(rentPaymentResident.joiningDate.slice(0, 4))} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear - 1)}>Previous year</button>
                 <strong>{rentPaymentYear}</strong>
@@ -1292,6 +1295,7 @@ function App() {
                       )}
                     </div>
                   </div>
+                  {documentError && <div className="alert alert-error document-message" role="alert">{documentError}</div>}
                   {documentPreview && (
                     <div className="document-preview">
                       <div className="preview-title">{documentPreview.title}</div>
@@ -1317,24 +1321,28 @@ function App() {
           </div>
         )}
 
-        {viewerResident && documentPreview && (
-          <div className="dialog-backdrop" onClick={() => { setViewerResident(null); setDocumentPreview(null); }}>
+        {viewerResident && (
+          <div className="dialog-backdrop" onClick={() => { setViewerResident(null); setDocumentPreview(null); setDocumentError(""); }}>
             <section className="document-viewer panel" role="dialog" aria-modal="true" aria-labelledby="document-viewer-title" onClick={(event) => event.stopPropagation()}>
               <div className="panel-heading">
                 <div>
                   <p className="eyebrow">PRIVATE RESIDENT FILE</p>
-                  <h2 id="document-viewer-title">{viewerResident.name} · {documentPreview.title}</h2>
+                  <h2 id="document-viewer-title">{viewerResident.name} · {documentPreview?.title || "Resident document"}</h2>
                   <p className="muted">Room {viewerResident.roomNumber}. Visible to the signed-in owner only.</p>
                 </div>
-                <button className="icon-button" onClick={() => { setViewerResident(null); setDocumentPreview(null); }} aria-label="Close file">×</button>
+                <button className="icon-button" onClick={() => { setViewerResident(null); setDocumentPreview(null); setDocumentError(""); }} aria-label="Close file">×</button>
               </div>
-              <div className="document-preview">
-                {documentPreview.contentType.startsWith("image/") ? (
-                  <img src={documentPreview.url} alt={documentPreview.title} />
-                ) : (
-                  <iframe title={documentPreview.title} src={documentPreview.url} />
-                )}
-              </div>
+              {documentError
+                ? <div className="alert alert-error document-message" role="alert">{documentError}</div>
+                : documentPreview
+                  ? <div className="document-preview">
+                    {documentPreview.contentType.startsWith("image/") ? (
+                      <img src={documentPreview.url} alt={documentPreview.title} />
+                    ) : (
+                      <iframe title={documentPreview.title} src={documentPreview.url} />
+                    )}
+                  </div>
+                  : <div className="document-message muted" role="status">Opening document…</div>}
             </section>
           </div>
         )}

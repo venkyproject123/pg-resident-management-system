@@ -31,11 +31,8 @@ public class OwnerAccount {
 	@Column(name = "location", length = 150)
 	private String location;
 
-	@Column(name = "whatsapp_number", unique = true, length = 20)
-	private String whatsappNumber;
-
-	@Column(name = "whatsapp_verified", nullable = false)
-	private boolean whatsappVerified;
+	@Column(name = "mobile_number", length = 20)
+	private String mobileNumber;
 
 	@Column(nullable = false, columnDefinition = "boolean not null default true")
 	private boolean approved = true;
@@ -46,22 +43,22 @@ public class OwnerAccount {
 	protected OwnerAccount() {
 	}
 
-	public OwnerAccount(String username, String passwordHash, String pgName, String whatsappNumber) {
-		this(username, passwordHash, pgName, null, whatsappNumber, true);
+	public OwnerAccount(String username, String passwordHash, String pgName, String mobileNumber) {
+		this(username, passwordHash, pgName, null, mobileNumber, true);
 	}
 
-	public OwnerAccount(String username, String passwordHash, String pgName, String whatsappNumber, boolean approved) {
-		this(username, passwordHash, pgName, null, whatsappNumber, approved);
+	public OwnerAccount(String username, String passwordHash, String pgName, String mobileNumber, boolean approved) {
+		this(username, passwordHash, pgName, null, mobileNumber, approved);
 	}
 
 	public OwnerAccount(
-			String username, String passwordHash, String pgName, String location, String whatsappNumber, boolean approved) {
+			String username, String passwordHash, String pgName, String location, String mobileNumber, boolean approved) {
 		this.accountScope = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 		this.username = username;
 		this.passwordHash = passwordHash;
 		this.pgName = pgName;
 		this.location = location;
-		this.whatsappNumber = whatsappNumber;
+		this.mobileNumber = mobileNumber;
 		this.approved = approved;
 	}
 
@@ -89,8 +86,8 @@ public class OwnerAccount {
 		return location;
 	}
 
-	public String getWhatsappNumber() {
-		return whatsappNumber;
+	public String getMobileNumber() {
+		return mobileNumber;
 	}
 
 	public boolean isApproved() {
