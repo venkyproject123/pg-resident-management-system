@@ -53,6 +53,25 @@ public class OwnerTenantSchemaMigration implements ApplicationRunner {
 					  AND mobile_number REGEXP '^\\\\+[1-9][0-9]{7,14}$'
 					""");
 		}
+		migrateResidentDocumentContentColumn();
+	}
+
+	private void migrateResidentDocumentContentColumn() {
+		if (!hasColumn("resident_document_files", "content")) {
+			return;
+		}
+
+		String dataType = jdbcTemplate.queryForObject("""
+				SELECT DATA_TYPE
+				FROM information_schema.columns
+				WHERE TABLE_SCHEMA = DATABASE()
+				  AND TABLE_NAME = ?
+				  AND COLUMN_NAME = ?
+				""", String.class, "resident_document_files", "content");
+		if (!"mediumblob".equalsIgnoreCase(dataType) && !"longblob".equalsIgnoreCase(dataType)) {
+			jdbcTemplate.execute(
+					"ALTER TABLE resident_document_files MODIFY COLUMN content MEDIUMBLOB NOT NULL");
+		}
 	}
 
 	private boolean hasColumn(String table, String column) {
