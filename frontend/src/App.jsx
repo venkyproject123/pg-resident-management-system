@@ -530,8 +530,7 @@ function App() {
     }
   }
 
-  async function changePaymentPeriod(event) {
-    const period = event.target.value;
+  async function loadPaymentPeriod(period) {
     if (!period || !credentials) return;
     const [year, month] = period.split("-").map(Number);
     setLoading(true);
@@ -546,6 +545,19 @@ function App() {
       setError(requestError.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function changePaymentPeriod(event) {
+    loadPaymentPeriod(event.target.value);
+  }
+
+  function shiftPaymentPeriod(offset) {
+    const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+    const shifted = new Date(year, month - 1 + offset, 1);
+    const period = `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+    if ((!firstPaymentPeriod || period >= firstPaymentPeriod) && period <= currentPaymentPeriod) {
+      loadPaymentPeriod(period);
     }
   }
 
@@ -1076,10 +1088,10 @@ function App() {
           </div>
           <div className="page-heading-actions">
             <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
-            <button className={`button ${monthlyPaymentsOpen ? "button-primary" : "button-light"}`} type="button" aria-expanded={monthlyPaymentsOpen} aria-controls="monthly-payments" onClick={showMonthlyPayments}>
+            <button className="button button-primary" type="button" aria-expanded={monthlyPaymentsOpen} aria-controls="monthly-payments" onClick={showMonthlyPayments}>
               {monthlyPaymentsOpen ? "Hide payments" : "Manage payments"}
             </button>
-            <button className="button button-light" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => {
+            <button className="button button-primary" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => {
               setMonthlyPaymentsOpen(false);
               setEmptyBedsOpen((open) => !open);
             }}>
@@ -1174,17 +1186,22 @@ function App() {
                 </h2>
                 <p className="muted">Review rent month by month. Record each month separately, even when collecting multiple months together.</p>
               </div>
-              <label className="payment-period-selector">
-                Payment month
-                <input
-                  type="month"
-                  value={selectedPaymentPeriod}
-                  min={firstPaymentPeriod || undefined}
-                  max={currentPaymentPeriod}
-                  onChange={changePaymentPeriod}
-                  disabled={loading}
-                />
-              </label>
+              <div className="payment-period-selector">
+                <span>Payment month</span>
+                <div className="payment-period-controls">
+                  <button type="button" className="button button-light" aria-label="Previous payment month" disabled={loading || (firstPaymentPeriod && selectedPaymentPeriod <= firstPaymentPeriod)} onClick={() => shiftPaymentPeriod(-1)}>‹</button>
+                  <input
+                    type="month"
+                    aria-label="Select payment month"
+                    value={selectedPaymentPeriod}
+                    min={firstPaymentPeriod || undefined}
+                    max={currentPaymentPeriod}
+                    onChange={changePaymentPeriod}
+                    disabled={loading}
+                  />
+                  <button type="button" className="button button-light" aria-label="Next payment month" disabled={loading || selectedPaymentPeriod >= currentPaymentPeriod} onClick={() => shiftPaymentPeriod(1)}>›</button>
+                </div>
+              </div>
             </div>
             {monthlyPaymentReport && <>
               <div className="monthly-payment-totals" aria-label="Monthly rent totals">
@@ -1205,7 +1222,7 @@ function App() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>COLLECTED</th><th>REMAINING</th><th>ACTION</th></tr>
+                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>ACTION</th></tr>
                   </thead>
                   <tbody>
                     {monthlyPaymentReport.residents.filter((payment) => payment.remaining > 0).map((payment) => (
@@ -1214,8 +1231,6 @@ function App() {
                         <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
                         <td data-label="Mobile">{payment.mobileNumber || "—"}</td>
                         <td data-label="Monthly rent">{formatCurrency(payment.rent)}</td>
-                        <td data-label="Collected">{formatCurrency(payment.collected)}</td>
-                        <td data-label="Remaining">{formatCurrency(payment.remaining)}</td>
                         <td data-label="Action"><button type="button" className="text-action" disabled={loading} onClick={() => {
                           const resident = allResidents.find((item) => item.id === payment.residentId);
                           if (resident) {
@@ -1228,34 +1243,6 @@ function App() {
                   </tbody>
                 </table>
               </div>
-              )}
-              <div className="payment-list-heading payment-history-heading">
-                <div>
-                  <p className="eyebrow">HISTORY</p>
-                  <h3>Payments recorded for selected month <span className="count-pill">{monthlyPaymentReport.residents.filter((payment) => payment.collected > 0).length}</span></h3>
-                </div>
-              </div>
-              {monthlyPaymentReport.residents.filter((payment) => payment.collected > 0).length === 0 ? (
-                <p className="room-availability-empty">No payments have been recorded for this month.</p>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>COLLECTED</th></tr>
-                    </thead>
-                    <tbody>
-                      {monthlyPaymentReport.residents.filter((payment) => payment.collected > 0).map((payment) => (
-                        <tr key={payment.residentId}>
-                          <td data-label="Resident">{payment.residentName}</td>
-                          <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
-                          <td data-label="Mobile">{payment.mobileNumber || "—"}</td>
-                          <td data-label="Monthly rent">{formatCurrency(payment.rent)}</td>
-                          <td data-label="Collected">{formatCurrency(payment.collected)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               )}
             </>}
           </section>
