@@ -42,14 +42,15 @@ public class RentPaymentService {
 	}
 
 	@Transactional(readOnly = true)
-	public MonthlyRentPaymentResponse findMonthlyPayments(OwnerAccount owner) {
+	public MonthlyRentPaymentResponse findMonthlyPayments(OwnerAccount owner, int year, int month) {
 		LocalDate today = LocalDate.now();
-		YearMonth currentMonth = YearMonth.from(today);
-		LocalDate monthStart = currentMonth.atDay(1);
+		YearMonth selectedMonth = YearMonth.of(year, month);
+		LocalDate monthStart = selectedMonth.atDay(1);
+		LocalDate monthEnd = selectedMonth.atEndOfMonth().isAfter(today) ? today : selectedMonth.atEndOfMonth();
 		List<Resident> residents = residentRepository.findAllByOwner_IdOrderByRoomNumberAscNameAsc(owner.getId());
 		Map<Long, BigDecimal> collectedByResident = new HashMap<>();
 		for (RentPayment payment : rentPaymentRepository.findAllByResident_Owner_IdAndPeriodYearAndPeriodMonth(
-				owner.getId(), currentMonth.getYear(), currentMonth.getMonthValue())) {
+				owner.getId(), selectedMonth.getYear(), selectedMonth.getMonthValue())) {
 			if (payment.isPaid()) {
 				collectedByResident.put(payment.getResident().getId(),
 						payment.getAmount() == null ? BigDecimal.ZERO : payment.getAmount());
@@ -60,10 +61,10 @@ public class RentPaymentService {
 		BigDecimal totalCollected = BigDecimal.ZERO;
 		BigDecimal totalRemaining = BigDecimal.ZERO;
 		List<MonthlyRentPaymentResponse.ResidentPayment> monthlyPayments = residents.stream()
-				.filter(resident -> !resident.getJoiningDate().isAfter(today))
+				.filter(resident -> !resident.getJoiningDate().isAfter(monthEnd))
 				.filter(resident -> resident.getStatus() != ResidentStatus.VACATED
-						|| resident.getVacatedDate() != null
-								&& !resident.getVacatedDate().isBefore(monthStart))
+						|| resident.getVacatedDate() == null
+								|| !resident.getVacatedDate().isBefore(monthStart))
 				.map(resident -> {
 					BigDecimal rent = resident.getRent();
 					BigDecimal collected = collectedByResident.getOrDefault(resident.getId(), BigDecimal.ZERO);
@@ -85,8 +86,8 @@ public class RentPaymentService {
 			totalRemaining = totalRemaining.add(payment.remaining());
 		}
 		return new MonthlyRentPaymentResponse(
-				currentMonth.getYear(),
-				currentMonth.getMonthValue(),
+				selectedMonth.getYear(),
+				selectedMonth.getMonthValue(),
 				totalRent,
 				totalCollected,
 				totalRemaining,

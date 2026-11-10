@@ -75,8 +75,11 @@ public class ResidentController {
 	}
 
 	@GetMapping("/monthly-payments")
-	public MonthlyRentPaymentResponse monthlyPayments(Authentication authentication) {
-		return rentPaymentService.findMonthlyPayments(owner(authentication));
+	public MonthlyRentPaymentResponse monthlyPayments(
+			Authentication authentication,
+			@RequestParam @jakarta.validation.constraints.Min(2000) @jakarta.validation.constraints.Max(2200) int year,
+			@RequestParam @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(12) int month) {
+		return rentPaymentService.findMonthlyPayments(owner(authentication), year, month);
 	}
 
 	@GetMapping("/rooms")

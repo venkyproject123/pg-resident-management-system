@@ -126,14 +126,17 @@ class ResidentControllerTests {
 
 	@Test
 	void ownerCanViewMonthlyRentTotals() throws Exception {
-		when(rentPaymentService.findMonthlyPayments(any(OwnerAccount.class)))
+		when(rentPaymentService.findMonthlyPayments(any(OwnerAccount.class), eq(2026), eq(11)))
 				.thenReturn(new MonthlyRentPaymentResponse(
 						2026, 11, new BigDecimal("12000.00"), new BigDecimal("8000.00"),
 						new BigDecimal("4000.00"), List.of(new MonthlyRentPaymentResponse.ResidentPayment(
 								7L, "Sample Resident", "101", 2, "+919876543210",
 								new BigDecimal("12000.00"), new BigDecimal("8000.00"), new BigDecimal("4000.00")))));
 
-		mockMvc.perform(get("/api/residents/monthly-payments").header("Authorization", AUTHORIZATION))
+		mockMvc.perform(get("/api/residents/monthly-payments")
+						.param("year", "2026")
+						.param("month", "11")
+						.header("Authorization", AUTHORIZATION))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.totalRent").value(12000.00))
 				.andExpect(jsonPath("$.totalCollected").value(8000.00))

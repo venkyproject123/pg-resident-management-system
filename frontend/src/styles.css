@@ -159,6 +159,13 @@ input:focus, textarea:focus, select:focus { border-color: #78a88c; box-shadow: 0
 .monthly-payments-panel { min-width: 0; overflow: hidden; margin-bottom: 20px; }
 .monthly-payments-panel .panel-heading { align-items: flex-start; }
 .monthly-payments-panel .muted { margin: 7px 0 0; font-size: 13px; }
+.payment-period-selector { display: grid; min-width: 170px; gap: 6px; color: #78857c; font-size: 12px; font-weight: 600; }
+.payment-period-selector input { min-height: 38px; padding: 0 10px; background: #fafbf9; }
+.payment-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px 14px; }
+.payment-list-heading h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: #344239; font-size: 16px; }
+.payment-list-heading .eyebrow { margin-bottom: 5px; }
+.payment-list-heading > .muted { margin: 0; font-size: 12px; }
+.payment-history-heading { margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf0ed; }
 .monthly-payment-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0 20px 18px; }
 .monthly-payment-totals article { display: grid; gap: 8px; padding: 15px; border: 1px solid #e4eae4; border-radius: 10px; background: #fafbf9; }
 .monthly-payment-totals article span { color: #78857c; font-size: 12px; }
@@ -393,6 +400,9 @@ td { font-size: 13px; }
   .panel-heading { align-items: stretch; flex-direction: column; gap: 13px; padding: 17px 15px; }
   .panel-heading h2 { font-size: 18px; }
   .monthly-payments-panel .panel-heading { align-items: flex-start; }
+  .payment-period-selector { width: 100%; }
+  .payment-list-heading { align-items: flex-start; flex-direction: column; padding: 0 15px 12px; }
+  .payment-history-heading { padding-top: 15px; }
   .monthly-payment-totals { grid-template-columns: 1fr; gap: 8px; padding: 0 15px 15px; }
   .monthly-payment-totals article { grid-template-columns: 1fr auto; align-items: center; padding: 12px; }
   .monthly-payment-totals article strong { font-size: 17px; }

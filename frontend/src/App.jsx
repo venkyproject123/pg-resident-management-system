@@ -149,6 +149,10 @@ function readSavedSession() {
 }
 
 function App() {
+  const [selectedPaymentPeriod, setSelectedPaymentPeriod] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [savedSession] = useState(readSavedSession);
   const [credentials, setCredentials] = useState(
     savedSession?.type === "owner" ? savedSession.credentials : null
@@ -318,11 +322,12 @@ function App() {
     };
   }, [authMode, registrationCredentials, registrationApproved]);
 
-  async function loadResidents(owner) {
+  async function loadResidents(owner, period = selectedPaymentPeriod) {
+    const [year, month] = period.split("-").map(Number);
     const [allResidents, rooms, monthlyPaymentReport] = await Promise.all([
       request(`${RESIDENTS_API}/all`, owner),
       request(`${RESIDENTS_API}/rooms`, owner),
-      request(`${RESIDENTS_API}/monthly-payments`, owner)
+      request(`${RESIDENTS_API}/monthly-payments?year=${year}&month=${month}`, owner)
     ]);
     setAllResidents(allResidents);
     setRooms(rooms);
@@ -525,6 +530,25 @@ function App() {
     }
   }
 
+  async function changePaymentPeriod(event) {
+    const period = event.target.value;
+    if (!period || !credentials) return;
+    const [year, month] = period.split("-").map(Number);
+    setLoading(true);
+    setError("");
+    try {
+      const report = await request(
+        `${RESIDENTS_API}/monthly-payments?year=${year}&month=${month}`,
+        credentials);
+      setSelectedPaymentPeriod(period);
+      setMonthlyPaymentReport(report);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function showResidentsByStatus(status) {
     setMonthlyPaymentsOpen(false);
     setSelectedStatus(status);
@@ -700,7 +724,7 @@ function App() {
     }
   }
 
-  async function openRentPayments(resident, year = null) {
+  async function openRentPayments(resident, year = null, month = null) {
     const joiningYear = Number(resident.joiningDate.slice(0, 4));
     const requestedYear = year ?? Math.max(new Date().getFullYear(), joiningYear);
     setLoading(true);
@@ -713,7 +737,17 @@ function App() {
       setRentPaymentResident(resident);
       setRentPaymentYear(requestedYear);
       setRentPayments(payments);
-      setPaymentDraft(null);
+      if (month) {
+        const selectedPayment = payments.find((payment) => payment.month === month);
+        setPaymentDraft({
+          month,
+          amount: selectedPayment?.amount ? String(selectedPayment.amount) : String(resident.rent),
+          paidDate: selectedPayment?.paidDate || new Date().toISOString().slice(0, 10),
+          method: selectedPayment?.method || "CASH"
+        });
+      } else {
+        setPaymentDraft(null);
+      }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1010,6 +1044,14 @@ function App() {
     const occupied = room.residents.filter((resident) => resident.status === "ACTIVE").length;
     return total + Math.max(room.capacity - occupied, 0);
   }, 0);
+  const firstPaymentPeriod = allResidents.reduce((first, resident) => {
+    const joiningPeriod = resident.joiningDate.slice(0, 7);
+    return !first || joiningPeriod < first ? joiningPeriod : first;
+  }, "");
+  const currentPaymentPeriod = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  })();
 
   return (
     <main className="dashboard">
@@ -1130,8 +1172,19 @@ function App() {
                   Manage payments
                   {monthlyPaymentReport && <span className="count-pill">{new Date(monthlyPaymentReport.year, monthlyPaymentReport.month - 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>}
                 </h2>
-                <p className="muted">Rent collected and remaining for this month, regardless of rent due dates.</p>
+                <p className="muted">Review rent month by month. Record each month separately, even when collecting multiple months together.</p>
               </div>
+              <label className="payment-period-selector">
+                Payment month
+                <input
+                  type="month"
+                  value={selectedPaymentPeriod}
+                  min={firstPaymentPeriod || undefined}
+                  max={currentPaymentPeriod}
+                  onChange={changePaymentPeriod}
+                  disabled={loading}
+                />
+              </label>
             </div>
             {monthlyPaymentReport && <>
               <div className="monthly-payment-totals" aria-label="Monthly rent totals">
@@ -1139,16 +1192,23 @@ function App() {
                 <article><span>Rent collected</span><strong>{formatCurrency(monthlyPaymentReport.totalCollected)}</strong></article>
                 <article><span>Remaining to collect</span><strong>{formatCurrency(monthlyPaymentReport.totalRemaining)}</strong></article>
               </div>
-              {monthlyPaymentReport.residents.length === 0 ? (
-                <p className="room-availability-empty">No residents are due for rent this month.</p>
+              <div className="payment-list-heading">
+                <div>
+                  <p className="eyebrow">FOLLOW-UP</p>
+                  <h3>Pending payments <span className="count-pill">{monthlyPaymentReport.residents.filter((payment) => payment.remaining > 0).length}</span></h3>
+                </div>
+                <p className="muted">Residents disappear from this list when the selected month is fully paid.</p>
+              </div>
+              {monthlyPaymentReport.residents.filter((payment) => payment.remaining > 0).length === 0 ? (
+                <p className="room-availability-empty">No pending payments for this month.</p>
               ) : (
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>COLLECTED</th><th>REMAINING</th></tr>
+                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>COLLECTED</th><th>REMAINING</th><th>ACTION</th></tr>
                   </thead>
                   <tbody>
-                    {monthlyPaymentReport.residents.map((payment) => (
+                    {monthlyPaymentReport.residents.filter((payment) => payment.remaining > 0).map((payment) => (
                       <tr key={payment.residentId}>
                         <td data-label="Resident">{payment.residentName}</td>
                         <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
@@ -1156,11 +1216,46 @@ function App() {
                         <td data-label="Monthly rent">{formatCurrency(payment.rent)}</td>
                         <td data-label="Collected">{formatCurrency(payment.collected)}</td>
                         <td data-label="Remaining">{formatCurrency(payment.remaining)}</td>
+                        <td data-label="Action"><button type="button" className="text-action" disabled={loading} onClick={() => {
+                          const resident = allResidents.find((item) => item.id === payment.residentId);
+                          if (resident) {
+                            const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+                            openRentPayments(resident, year, month);
+                          }
+                        }}>{payment.collected > 0 ? "Update payment" : "Record payment"}</button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              )}
+              <div className="payment-list-heading payment-history-heading">
+                <div>
+                  <p className="eyebrow">HISTORY</p>
+                  <h3>Payments recorded for selected month <span className="count-pill">{monthlyPaymentReport.residents.filter((payment) => payment.collected > 0).length}</span></h3>
+                </div>
+              </div>
+              {monthlyPaymentReport.residents.filter((payment) => payment.collected > 0).length === 0 ? (
+                <p className="room-availability-empty">No payments have been recorded for this month.</p>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>COLLECTED</th></tr>
+                    </thead>
+                    <tbody>
+                      {monthlyPaymentReport.residents.filter((payment) => payment.collected > 0).map((payment) => (
+                        <tr key={payment.residentId}>
+                          <td data-label="Resident">{payment.residentName}</td>
+                          <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
+                          <td data-label="Mobile">{payment.mobileNumber || "—"}</td>
+                          <td data-label="Monthly rent">{formatCurrency(payment.rent)}</td>
+                          <td data-label="Collected">{formatCurrency(payment.collected)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>}
           </section>

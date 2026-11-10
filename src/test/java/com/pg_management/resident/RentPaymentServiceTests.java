@@ -114,7 +114,7 @@ class RentPaymentServiceTests {
 				4L, month.getYear(), month.getMonthValue())).thenReturn(List.of(paidPayment));
 		RentPaymentService service = new RentPaymentService(residentRepository, rentPaymentRepository);
 
-		var report = service.findMonthlyPayments(owner);
+		var report = service.findMonthlyPayments(owner, month.getYear(), month.getMonthValue());
 
 		assertEquals(month.getYear(), report.year());
 		assertEquals(month.getMonthValue(), report.month());
