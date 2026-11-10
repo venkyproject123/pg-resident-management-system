@@ -125,6 +125,21 @@ class ResidentControllerTests {
 	}
 
 	@Test
+	void ownerCanListPendingRentPayments() throws Exception {
+		when(rentPaymentService.findPendingThroughToday(any(OwnerAccount.class)))
+				.thenReturn(List.of(new PendingRentPaymentResponse(
+						"Sample Resident", "101", 2, LocalDate.of(2026, 11, 1), "+919876543210")));
+
+		mockMvc.perform(get("/api/residents/pending-payments").header("Authorization", AUTHORIZATION))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].residentName").value("Sample Resident"))
+				.andExpect(jsonPath("$[0].roomNumber").value("101"))
+				.andExpect(jsonPath("$[0].sharing").value(2))
+				.andExpect(jsonPath("$[0].rentDate").value("2026-11-01"))
+				.andExpect(jsonPath("$[0].mobileNumber").value("+919876543210"));
+	}
+
+	@Test
 	void ownerCanAddRoomWithSharingCapacity() throws Exception {
 		when(roomService.add(any(OwnerAccount.class), any(RoomRequest.class)))
 				.thenReturn(new RoomResponse("101", 2));

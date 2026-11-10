@@ -70,6 +70,10 @@ public class RentPayment {
 		return periodMonth;
 	}
 
+	public Resident getResident() {
+		return resident;
+	}
+
 	public boolean isPaid() {
 		return paid;
 	}

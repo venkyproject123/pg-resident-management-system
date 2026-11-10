@@ -74,6 +74,11 @@ public class ResidentController {
 		return residentService.findAllMembers(owner(authentication));
 	}
 
+	@GetMapping("/pending-payments")
+	public List<PendingRentPaymentResponse> pendingPayments(Authentication authentication) {
+		return rentPaymentService.findPendingThroughToday(owner(authentication));
+	}
+
 	@GetMapping("/rooms")
 	public List<RoomResponse> findRooms(Authentication authentication) {
 		return roomService.findAll(owner(authentication));

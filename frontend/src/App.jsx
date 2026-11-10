@@ -165,6 +165,8 @@ function App() {
   const [allResidents, setAllResidents] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [roomForm, setRoomForm] = useState({ roomNumber: "", sharing: "" });
+  const [pendingPayments, setPendingPayments] = useState([]);
+  const [pendingPaymentsOpen, setPendingPaymentsOpen] = useState(false);
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
@@ -312,12 +314,14 @@ function App() {
   }, [authMode, registrationCredentials, registrationApproved]);
 
   async function loadResidents(owner) {
-    const [allResidents, rooms] = await Promise.all([
+    const [allResidents, rooms, pendingPayments] = await Promise.all([
       request(`${RESIDENTS_API}/all`, owner),
-      request(`${RESIDENTS_API}/rooms`, owner)
+      request(`${RESIDENTS_API}/rooms`, owner),
+      request(`${RESIDENTS_API}/pending-payments`, owner)
     ]);
     setAllResidents(allResidents);
     setRooms(rooms);
+    setPendingPayments(pendingPayments);
     setResidentTotals({
       active: allResidents.filter((resident) => resident.status === "ACTIVE").length,
       vacated: allResidents.filter((resident) => resident.status === "VACATED").length
@@ -476,6 +480,8 @@ function App() {
     setAllResidents([]);
     setRooms([]);
     setRoomForm({ roomNumber: "", sharing: "" });
+    setPendingPayments([]);
+    setPendingPaymentsOpen(false);
     setLoginForm({ username: "", password: "" });
     setResidentTotals({ active: 0, vacated: 0 });
     setProfileForm({ username: "", pgName: "", location: "" });
@@ -515,7 +521,16 @@ function App() {
   }
 
   function showResidentsByStatus(status) {
+    setPendingPaymentsOpen(false);
     setSelectedStatus(status);
+    setSearchText("");
+    setError("");
+    setNotice("");
+  }
+
+  function showPendingPayments() {
+    setEmptyBedsOpen(false);
+    setPendingPaymentsOpen((open) => !open);
     setSearchText("");
     setError("");
     setNotice("");
@@ -1013,7 +1028,10 @@ function App() {
           </div>
           <div className="page-heading-actions">
             <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
-            <button className="button button-light" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => setEmptyBedsOpen((open) => !open)}>
+            <button className="button button-light" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => {
+              setPendingPaymentsOpen(false);
+              setEmptyBedsOpen((open) => !open);
+            }}>
               {emptyBedsOpen ? "Hide rooms/beds" : "Manage rooms/beds"}
             </button>
           </div>
@@ -1092,8 +1110,44 @@ function App() {
             <span className="stat-icon icon-vacated">↗</span>
             <div><p className="stat-label">Total vacated members</p><strong>{residentTotals.vacated}</strong></div>
           </button>
+          <button className={`stat-card stat-card-button${pendingPaymentsOpen ? " stat-card-selected" : ""}`} type="button" aria-pressed={pendingPaymentsOpen} onClick={showPendingPayments} disabled={loading}>
+            <span className="stat-icon icon-pending">₹</span>
+            <div><p className="stat-label">Pending payments till today</p><strong>{pendingPayments.length}</strong></div>
+          </button>
         </section>
 
+        {pendingPaymentsOpen ? (
+          <section className="panel pending-payments-panel" aria-labelledby="pending-payments-title">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">RENT FOLLOW-UP</p>
+                <h2 id="pending-payments-title">Pending payments till today <span className="count-pill">{pendingPayments.length}</span></h2>
+                <p className="muted">Rent dates follow each resident’s joining day of the month.</p>
+              </div>
+            </div>
+            {pendingPayments.length === 0 ? (
+              <p className="room-availability-empty">No rent payments are pending through today.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>RENT DATE</th><th>MOBILE</th></tr>
+                  </thead>
+                  <tbody>
+                    {pendingPayments.map((payment, index) => (
+                      <tr key={`${payment.residentName}-${payment.roomNumber}-${payment.rentDate}-${index}`}>
+                        <td data-label="Resident">{payment.residentName}</td>
+                        <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
+                        <td data-label="Rent date">{payment.rentDate}</td>
+                        <td data-label="Mobile">{payment.mobileNumber || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ) : (
         <section className="workspace">
           <article className="panel resident-panel">
             <div className="panel-heading">
@@ -1227,6 +1281,7 @@ function App() {
           </article>
 
         </section>
+        )}
         </>}
 
         {rentPaymentResident && (

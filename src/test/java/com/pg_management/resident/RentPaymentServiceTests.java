@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
@@ -82,5 +83,54 @@ class RentPaymentServiceTests {
 
 		assertEquals(400, exception.getStatusCode().value());
 		verify(rentPaymentRepository, never()).saveAndFlush(any());
+	}
+
+	@Test
+	void pendingReportUsesJoiningDayAndExcludesPaidMonths() {
+		OwnerAccount owner = mock(OwnerAccount.class);
+		when(owner.getId()).thenReturn(4L);
+		LocalDate today = LocalDate.now();
+		LocalDate joiningDate = YearMonth.from(today).minusMonths(2).atDay(1);
+		Resident resident = new Resident(owner, "Resident One", "Parent", "+919876543210", "101", 2,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, joiningDate, "Address", "Office");
+		org.springframework.test.util.ReflectionTestUtils.setField(resident, "id", 8L);
+		RentPayment paidPayment = new RentPayment(resident, today.getYear(), today.minusMonths(1).getMonthValue());
+		paidPayment.markPaid(new BigDecimal("12000.00"), today, RentPaymentMethod.UPI);
+		when(residentRepository.findAllByOwner_IdOrderByRoomNumberAscNameAsc(4L)).thenReturn(List.of(resident));
+		when(rentPaymentRepository.findAllByResident_Owner_IdAndPeriodYearBetween(
+				4L, joiningDate.getYear(), today.getYear())).thenReturn(List.of(paidPayment));
+		RentPaymentService service = new RentPaymentService(residentRepository, rentPaymentRepository);
+
+		var pending = service.findPendingThroughToday(owner);
+
+		assertEquals(List.of(joiningDate, today.withDayOfMonth(1)),
+				pending.stream().map(PendingRentPaymentResponse::rentDate).toList());
+		assertEquals(List.of("Resident One", "Resident One"),
+				pending.stream().map(PendingRentPaymentResponse::residentName).toList());
+		assertEquals("+919876543210", pending.get(0).mobileNumber());
+		assertEquals(2, pending.get(0).sharing());
+	}
+
+	@Test
+	void pendingReportStopsRentDatesAfterVacating() {
+		OwnerAccount owner = mock(OwnerAccount.class);
+		when(owner.getId()).thenReturn(4L);
+		LocalDate today = LocalDate.now();
+		LocalDate vacatedDate = today.minusMonths(1).withDayOfMonth(15);
+		LocalDate joiningDate = YearMonth.from(vacatedDate).minusMonths(1).atDay(1);
+		Resident resident = new Resident(owner, "Resident One", "Parent", "+919876543210", "101", 2,
+				new BigDecimal("12000.00"), BigDecimal.ZERO, joiningDate, "Address", "Office");
+		org.springframework.test.util.ReflectionTestUtils.setField(resident, "id", 8L);
+		resident.markVacated();
+		org.springframework.test.util.ReflectionTestUtils.setField(resident, "vacatedDate", vacatedDate);
+		when(residentRepository.findAllByOwner_IdOrderByRoomNumberAscNameAsc(4L)).thenReturn(List.of(resident));
+		when(rentPaymentRepository.findAllByResident_Owner_IdAndPeriodYearBetween(
+				4L, joiningDate.getYear(), today.getYear())).thenReturn(List.of());
+		RentPaymentService service = new RentPaymentService(residentRepository, rentPaymentRepository);
+
+		var pending = service.findPendingThroughToday(owner);
+
+		assertEquals(List.of(joiningDate, vacatedDate.withDayOfMonth(1)),
+				pending.stream().map(PendingRentPaymentResponse::rentDate).toList());
 	}
 }

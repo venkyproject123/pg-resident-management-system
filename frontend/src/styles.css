@@ -121,13 +121,13 @@ input:focus, textarea:focus, select:focus { border-color: #78a88c; box-shadow: 0
 .page-heading h1 { margin: 0; font: 700 29px "Segoe UI", Arial, sans-serif; letter-spacing: -1.1px; }
 .page-heading .muted { margin: 7px 0 0; font-size: 12px; }
 .page-heading-actions { display: flex; flex-wrap: wrap; gap: 9px; }
-.stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; margin-bottom: 19px; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; margin-bottom: 19px; }
 .stat-card { display: flex; align-items: center; gap: 13px; min-height: 90px; padding: 16px 19px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .stat-card-button { width: 100%; color: inherit; text-align: left; }
 .stat-card-button:hover:not(:disabled), .stat-card-selected { border-color: #a8c5b1; box-shadow: 0 3px 12px #276b4d12; }
 .stat-card-button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .stat-icon { display: grid; flex: 0 0 37px; width: 37px; height: 37px; place-items: center; border-radius: 11px; font-size: 17px; }
-.icon-total { background: #edf4ee; color: #4b8762; }.icon-active { background: #eaf6ef; color: #2f8b58; }.icon-vacated { background: #f3f1ec; color: #8e8269; }
+.icon-total { background: #edf4ee; color: #4b8762; }.icon-active { background: #eaf6ef; color: #2f8b58; }.icon-vacated { background: #f3f1ec; color: #8e8269; }.icon-pending { background: #fff3df; color: #a96813; }
 .stat-label { margin: 0 0 4px; color: #7a857d; font-size: 10px; }
 .stat-card strong { font: 700 21px "Segoe UI", Arial, sans-serif; }
 .stat-caption { margin-left: auto; color: #9aa39d; font-size: 10px; }
@@ -156,6 +156,9 @@ input:focus, textarea:focus, select:focus { border-color: #78a88c; box-shadow: 0
 .room-availability-empty { margin: 0; padding: 16px; border-radius: 9px; background: #f8faf7; color: #6d7b71; font-size: 14px; line-height: 1.5; }
 .panel { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 3px 14px #26362906; }
 .resident-panel { min-width: 0; overflow: hidden; }
+.pending-payments-panel { min-width: 0; overflow: hidden; margin-bottom: 20px; }
+.pending-payments-panel .panel-heading { align-items: flex-start; }
+.pending-payments-panel .muted { margin: 7px 0 0; font-size: 13px; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 20px 20px 17px; }
 .panel-heading .eyebrow { margin-bottom: 5px; }
 .panel-heading h2 { display: flex; align-items: center; gap: 8px; margin: 0; font: 700 16px "Segoe UI", Arial, sans-serif; letter-spacing: -.3px; }
@@ -366,6 +369,7 @@ td { font-size: 13px; }
   .page-heading-actions { width: 100%; }
   .page-heading-actions .button { flex: 1 1 0; min-height: 48px; padding: 0 10px; font-size: 14px; }
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 15px; }
+  .stats-grid .stat-card-button:nth-child(3) { grid-column: 1 / -1; }
   .stat-card { min-height: 82px; gap: 9px; padding: 12px; }
   .stat-icon { flex-basis: 34px; width: 34px; height: 34px; font-size: 16px; }
   .stat-label { font-size: 12px; line-height: 1.35; }
