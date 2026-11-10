@@ -3,6 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
 const RESIDENTS_API = "/api/residents";
+const formatCurrency = (amount) => new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 2
+}).format(amount || 0);
 const emptyForm = {
   name: "",
   fatherName: "",
@@ -165,8 +170,8 @@ function App() {
   const [allResidents, setAllResidents] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [roomForm, setRoomForm] = useState({ roomNumber: "", sharing: "" });
-  const [pendingPayments, setPendingPayments] = useState([]);
-  const [pendingPaymentsOpen, setPendingPaymentsOpen] = useState(false);
+  const [monthlyPaymentReport, setMonthlyPaymentReport] = useState(null);
+  const [monthlyPaymentsOpen, setMonthlyPaymentsOpen] = useState(false);
   const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
@@ -314,14 +319,14 @@ function App() {
   }, [authMode, registrationCredentials, registrationApproved]);
 
   async function loadResidents(owner) {
-    const [allResidents, rooms, pendingPayments] = await Promise.all([
+    const [allResidents, rooms, monthlyPaymentReport] = await Promise.all([
       request(`${RESIDENTS_API}/all`, owner),
       request(`${RESIDENTS_API}/rooms`, owner),
-      request(`${RESIDENTS_API}/pending-payments`, owner)
+      request(`${RESIDENTS_API}/monthly-payments`, owner)
     ]);
     setAllResidents(allResidents);
     setRooms(rooms);
-    setPendingPayments(pendingPayments);
+    setMonthlyPaymentReport(monthlyPaymentReport);
     setResidentTotals({
       active: allResidents.filter((resident) => resident.status === "ACTIVE").length,
       vacated: allResidents.filter((resident) => resident.status === "VACATED").length
@@ -480,8 +485,8 @@ function App() {
     setAllResidents([]);
     setRooms([]);
     setRoomForm({ roomNumber: "", sharing: "" });
-    setPendingPayments([]);
-    setPendingPaymentsOpen(false);
+    setMonthlyPaymentReport(null);
+    setMonthlyPaymentsOpen(false);
     setLoginForm({ username: "", password: "" });
     setResidentTotals({ active: 0, vacated: 0 });
     setProfileForm({ username: "", pgName: "", location: "" });
@@ -521,16 +526,16 @@ function App() {
   }
 
   function showResidentsByStatus(status) {
-    setPendingPaymentsOpen(false);
+    setMonthlyPaymentsOpen(false);
     setSelectedStatus(status);
     setSearchText("");
     setError("");
     setNotice("");
   }
 
-  function showPendingPayments() {
+  function showMonthlyPayments() {
     setEmptyBedsOpen(false);
-    setPendingPaymentsOpen((open) => !open);
+    setMonthlyPaymentsOpen((open) => !open);
     setSearchText("");
     setError("");
     setNotice("");
@@ -738,6 +743,7 @@ function App() {
         ...payments.filter((payment) => payment.month !== result.month),
         result
       ].sort((first, second) => first.month - second.month));
+      await loadResidents(credentials);
       setPaymentDraft(null);
       setNotice(result.wasAlreadyPaid
         ? "Rent payment details updated."
@@ -1028,8 +1034,11 @@ function App() {
           </div>
           <div className="page-heading-actions">
             <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
+            <button className={`button ${monthlyPaymentsOpen ? "button-primary" : "button-light"}`} type="button" aria-expanded={monthlyPaymentsOpen} aria-controls="monthly-payments" onClick={showMonthlyPayments}>
+              {monthlyPaymentsOpen ? "Hide payments" : "Manage payments"}
+            </button>
             <button className="button button-light" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => {
-              setPendingPaymentsOpen(false);
+              setMonthlyPaymentsOpen(false);
               setEmptyBedsOpen((open) => !open);
             }}>
               {emptyBedsOpen ? "Hide rooms/beds" : "Manage rooms/beds"}
@@ -1110,42 +1119,50 @@ function App() {
             <span className="stat-icon icon-vacated">↗</span>
             <div><p className="stat-label">Total vacated members</p><strong>{residentTotals.vacated}</strong></div>
           </button>
-          <button className={`stat-card stat-card-button${pendingPaymentsOpen ? " stat-card-selected" : ""}`} type="button" aria-pressed={pendingPaymentsOpen} onClick={showPendingPayments} disabled={loading}>
-            <span className="stat-icon icon-pending">₹</span>
-            <div><p className="stat-label">Pending payments till today</p><strong>{pendingPayments.length}</strong></div>
-          </button>
         </section>
 
-        {pendingPaymentsOpen ? (
-          <section className="panel pending-payments-panel" aria-labelledby="pending-payments-title">
+        {monthlyPaymentsOpen ? (
+          <section className="panel monthly-payments-panel" id="monthly-payments" aria-labelledby="monthly-payments-title">
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">RENT FOLLOW-UP</p>
-                <h2 id="pending-payments-title">Pending payments till today <span className="count-pill">{pendingPayments.length}</span></h2>
-                <p className="muted">Rent dates follow each resident’s joining day of the month.</p>
+                <p className="eyebrow">MONTHLY RENT</p>
+                <h2 id="monthly-payments-title">
+                  Manage payments
+                  {monthlyPaymentReport && <span className="count-pill">{new Date(monthlyPaymentReport.year, monthlyPaymentReport.month - 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>}
+                </h2>
+                <p className="muted">Rent collected and remaining for this month, regardless of rent due dates.</p>
               </div>
             </div>
-            {pendingPayments.length === 0 ? (
-              <p className="room-availability-empty">No rent payments are pending through today.</p>
-            ) : (
+            {monthlyPaymentReport && <>
+              <div className="monthly-payment-totals" aria-label="Monthly rent totals">
+                <article><span>Total rent</span><strong>{formatCurrency(monthlyPaymentReport.totalRent)}</strong></article>
+                <article><span>Rent collected</span><strong>{formatCurrency(monthlyPaymentReport.totalCollected)}</strong></article>
+                <article><span>Remaining to collect</span><strong>{formatCurrency(monthlyPaymentReport.totalRemaining)}</strong></article>
+              </div>
+              {monthlyPaymentReport.residents.length === 0 ? (
+                <p className="room-availability-empty">No residents are due for rent this month.</p>
+              ) : (
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>RENT DATE</th><th>MOBILE</th></tr>
+                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>COLLECTED</th><th>REMAINING</th></tr>
                   </thead>
                   <tbody>
-                    {pendingPayments.map((payment, index) => (
-                      <tr key={`${payment.residentName}-${payment.roomNumber}-${payment.rentDate}-${index}`}>
+                    {monthlyPaymentReport.residents.map((payment) => (
+                      <tr key={payment.residentId}>
                         <td data-label="Resident">{payment.residentName}</td>
                         <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
-                        <td data-label="Rent date">{payment.rentDate}</td>
                         <td data-label="Mobile">{payment.mobileNumber || "—"}</td>
+                        <td data-label="Monthly rent">{formatCurrency(payment.rent)}</td>
+                        <td data-label="Collected">{formatCurrency(payment.collected)}</td>
+                        <td data-label="Remaining">{formatCurrency(payment.remaining)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
+              )}
+            </>}
           </section>
         ) : (
         <section className="workspace">

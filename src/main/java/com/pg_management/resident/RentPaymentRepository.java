@@ -12,6 +12,9 @@ public interface RentPaymentRepository extends JpaRepository<RentPayment, Long> 
 	List<RentPayment> findAllByResident_Owner_IdAndPeriodYearBetween(
 			Long ownerId, int firstYear, int lastYear);
 
+	List<RentPayment> findAllByResident_Owner_IdAndPeriodYearAndPeriodMonth(
+			Long ownerId, int year, int month);
+
 	Optional<RentPayment> findByResidentAndPeriodYearAndPeriodMonth(
 			Resident resident, int periodYear, int periodMonth);
 

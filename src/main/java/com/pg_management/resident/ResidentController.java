@@ -74,9 +74,9 @@ public class ResidentController {
 		return residentService.findAllMembers(owner(authentication));
 	}
 
-	@GetMapping("/pending-payments")
-	public List<PendingRentPaymentResponse> pendingPayments(Authentication authentication) {
-		return rentPaymentService.findPendingThroughToday(owner(authentication));
+	@GetMapping("/monthly-payments")
+	public MonthlyRentPaymentResponse monthlyPayments(Authentication authentication) {
+		return rentPaymentService.findMonthlyPayments(owner(authentication));
 	}
 
 	@GetMapping("/rooms")

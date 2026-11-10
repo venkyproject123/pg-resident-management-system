@@ -125,18 +125,21 @@ class ResidentControllerTests {
 	}
 
 	@Test
-	void ownerCanListPendingRentPayments() throws Exception {
-		when(rentPaymentService.findPendingThroughToday(any(OwnerAccount.class)))
-				.thenReturn(List.of(new PendingRentPaymentResponse(
-						"Sample Resident", "101", 2, LocalDate.of(2026, 11, 1), "+919876543210")));
+	void ownerCanViewMonthlyRentTotals() throws Exception {
+		when(rentPaymentService.findMonthlyPayments(any(OwnerAccount.class)))
+				.thenReturn(new MonthlyRentPaymentResponse(
+						2026, 11, new BigDecimal("12000.00"), new BigDecimal("8000.00"),
+						new BigDecimal("4000.00"), List.of(new MonthlyRentPaymentResponse.ResidentPayment(
+								7L, "Sample Resident", "101", 2, "+919876543210",
+								new BigDecimal("12000.00"), new BigDecimal("8000.00"), new BigDecimal("4000.00")))));
 
-		mockMvc.perform(get("/api/residents/pending-payments").header("Authorization", AUTHORIZATION))
+		mockMvc.perform(get("/api/residents/monthly-payments").header("Authorization", AUTHORIZATION))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].residentName").value("Sample Resident"))
-				.andExpect(jsonPath("$[0].roomNumber").value("101"))
-				.andExpect(jsonPath("$[0].sharing").value(2))
-				.andExpect(jsonPath("$[0].rentDate").value("2026-11-01"))
-				.andExpect(jsonPath("$[0].mobileNumber").value("+919876543210"));
+				.andExpect(jsonPath("$.totalRent").value(12000.00))
+				.andExpect(jsonPath("$.totalCollected").value(8000.00))
+				.andExpect(jsonPath("$.totalRemaining").value(4000.00))
+				.andExpect(jsonPath("$.residents[0].residentName").value("Sample Resident"))
+				.andExpect(jsonPath("$.residents[0].roomNumber").value("101"));
 	}
 
 	@Test
