@@ -267,20 +267,7 @@ function App() {
       return () => { mounted = false; };
     }
 
-    let mounted = true;
-    fetch(apiUrl("/api/owner/setup-status"))
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Could not check owner setup status (${response.status}).`);
-        return response.json();
-      })
-      .then((result) => {
-        if (!mounted) return;
-        if (result.setupRequired) setAuthMode("SETUP");
-      })
-      .catch((requestError) => {
-        if (mounted) setError(requestError.message);
-      });
-    return () => { mounted = false; };
+    return undefined;
   }, []);
 
   useEffect(() => {
@@ -967,10 +954,6 @@ function App() {
               <span className="brand-mark">H</span>
               <span>haven<span className="brand-period">.</span></span>
             </a>
-            <div className="landing-header-actions">
-              <button type="button" className="button button-light" onClick={() => setAuthMode("ADMIN_LOGIN")}>Admin</button>
-              <button type="button" className="button button-primary" onClick={() => setAuthMode("LOGIN")}>Owner sign in</button>
-            </div>
           </header>
           <section className="landing-hero">
             <div className="landing-copy">
@@ -979,7 +962,8 @@ function App() {
               <p className="muted">Keep resident records, room availability, and month-by-month rent payments together in one clear, secure dashboard.</p>
               <div className="landing-hero-actions">
                 <button type="button" className="button button-primary" onClick={() => setAuthMode("SETUP")}>＋ Register your PG</button>
-                <button type="button" className="button button-light" onClick={() => setAuthMode("LOGIN")}>Sign in to your dashboard</button>
+                <button type="button" className="button button-primary" onClick={() => setAuthMode("LOGIN")}>Owner login</button>
+                <button type="button" className="button button-primary" onClick={() => setAuthMode("ADMIN_LOGIN")}>Admin login</button>
               </div>
               <p className="landing-approval-note">New owner accounts require administrator approval.</p>
             </div>
@@ -1017,9 +1001,9 @@ function App() {
             <span className="brand-mark">H</span>
             <span>haven<span className="brand-period">.</span></span>
           </a>
-          <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : "OWNER PORTAL"}</p>
-          <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your owner account." : authMode === "ADMIN_LOGIN" ? "Admin sign in." : "Welcome back."}</h1>
-          <p className="muted">{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering in Haven Resident Management System. ${registrationSuccessPgName} registered successfully. Please wait a few seconds for admin approval.` : authMode === "SETUP" ? "Create your PG owner account. An administrator must approve it before you can sign in." : authMode === "ADMIN_LOGIN" ? "Sign in to review and approve owner registrations." : "Sign in to securely manage your residents."}</p>
+          <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "PG REGISTRATION" : "OWNER PORTAL"}</p>
+          <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Register your PG" : authMode === "ADMIN_LOGIN" ? "Admin login" : "Owner login"}</h1>
+          {authMode === "REGISTRATION_SUCCESS" && <p className="muted">{registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering ${registrationSuccessPgName}. Please wait for administrator approval.`}</p>}
           {authMode === "REGISTRATION_SUCCESS" && !registrationApproved && <div className="alert alert-success" role="status">Waiting for an administrator to approve your registration. This page will update when approved.</div>}
           {authMode === "REGISTRATION_SUCCESS" && registrationApproved && <button type="button" className="button button-primary button-wide" onClick={() => {
             setAuthMode("LOGIN");
@@ -1074,34 +1058,12 @@ function App() {
             </label>
             <label>
               Mobile number
-              <input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" title="Enter exactly 10 digits, starting with 6, 7, 8, or 9." aria-describedby="owner-mobile-help" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} />
-              <span id="owner-mobile-help" className={`field-help${setupForm.mobileNumber && !/^[6-9][0-9]{9}$/.test(setupForm.mobileNumber) ? " field-help-error" : ""}`} aria-live="polite">
-                {setupForm.mobileNumber && /^[6-9][0-9]{9}$/.test(setupForm.mobileNumber)
-                  ? "Valid 10-digit mobile number."
-                  : "Enter 10 digits starting with 6, 7, 8, or 9."}
-              </span>
+              <input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} />
             </label>
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
           </form>}
-          {authMode === "LOGIN" && <>
-            <button type="button" className="text-action" onClick={() => { setAuthMode("SETUP"); setError(""); setNotice(""); }}>Register your PG</button>
-            <button type="button" className="text-action" onClick={() => { setAuthMode("ADMIN_LOGIN"); setError(""); setNotice(""); }}>Admin login</button>
-            <button type="button" className="text-action" onClick={() => { setAuthMode("LANDING"); setError(""); setNotice(""); }}>Back to home</button>
-            <p className="login-footnote">Your password is stored as a one-way hash. Contact your administrator if you need help recovering access.</p>
-          </>}
-          {authMode !== "LOGIN" && authMode !== "REGISTRATION_SUCCESS" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
+          <button type="button" className="text-action auth-back-button" onClick={() => { setAuthMode("LANDING"); setError(""); setNotice(""); }}>← Back</button>
         </section>
-        <aside className="login-aside">
-          <div className="aside-orb orb-one" />
-          <div className="aside-orb orb-two" />
-          <div className="aside-content">
-            <span className="aside-kicker">A calmer way to manage your PG</span>
-            <h2>Your residents.<br />All in one place.</h2>
-            <p>Keep everyday records clear, organised, and in your hands.</p>
-            <div className="aside-note"><span className="lock-icon">↗</span> Private owner access</div>
-          </div>
-          <span className="aside-caption">RESIDENT MANAGEMENT · MADE SIMPLE</span>
-        </aside>
       </main>
     );
   }
@@ -1571,12 +1533,7 @@ function App() {
                   </div>
                   <label>
                     Mobile number
-                    <input type="tel" name="mobileNumber" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" title="Enter exactly 10 digits, starting with 6, 7, 8, or 9." aria-describedby="resident-mobile-help" required value={form.mobileNumber} onChange={updateForm} />
-                    <span id="resident-mobile-help" className={`field-help${form.mobileNumber && !/^[6-9][0-9]{9}$/.test(form.mobileNumber) ? " field-help-error" : ""}`} aria-live="polite">
-                      {form.mobileNumber && /^[6-9][0-9]{9}$/.test(form.mobileNumber)
-                        ? "Valid 10-digit mobile number."
-                        : "Enter 10 digits starting with 6, 7, 8, or 9."}
-                    </span>
+                    <input type="tel" name="mobileNumber" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={form.mobileNumber} onChange={updateForm} />
                   </label>
                   <div className="form-row">
                     <label>Room number<input name="roomNumber" maxLength="30" required value={form.roomNumber} onChange={updateForm} /></label>
