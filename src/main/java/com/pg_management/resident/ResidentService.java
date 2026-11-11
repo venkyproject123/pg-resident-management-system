@@ -45,8 +45,11 @@ public class ResidentService {
 	}
 
 	public ResidentResponse create(CreateResidentRequest request, OwnerAccount owner) {
+		long startedAt = System.nanoTime();
 		String roomNumber = request.roomNumber().trim();
+		long validationStartedAt = System.nanoTime();
 		validateRoomCapacity(owner, roomNumber, request.sharing(), null, true);
+		long validationDurationMs = elapsedMs(validationStartedAt);
 		Resident resident = new Resident(
 				owner,
 				request.name(),
@@ -60,7 +63,11 @@ public class ResidentService {
 				request.permanentAddress(),
 				request.companyAddress());
 
-		return ResidentResponse.from(residentRepository.save(resident));
+		long saveStartedAt = System.nanoTime();
+		Resident savedResident = residentRepository.save(resident);
+		LOGGER.info("resident_create ownerId={} residentId={} roomValidationMs={} saveMs={} serviceDurationMs={}",
+				owner.getId(), savedResident.getId(), validationDurationMs, elapsedMs(saveStartedAt), elapsedMs(startedAt));
+		return ResidentResponse.from(savedResident);
 	}
 
 	@Transactional(readOnly = true)
@@ -171,10 +178,21 @@ public class ResidentService {
 	}
 
 	public void permanentlyDelete(OwnerAccount owner, Long id) {
+		long startedAt = System.nanoTime();
 		Resident resident = getResident(owner, id);
+		long paymentCleanupStartedAt = System.nanoTime();
 		rentPaymentRepository.deleteAllByResident(resident);
+		long paymentCleanupDurationMs = elapsedMs(paymentCleanupStartedAt);
+		long residentDeleteStartedAt = System.nanoTime();
 		residentRepository.delete(resident);
+		long residentDeleteDurationMs = elapsedMs(residentDeleteStartedAt);
 		registerPermanentDeletionCleanup(resident.getPhotoStorageKey(), resident.getIdentityProofStorageKey());
+		LOGGER.info("resident_permanent_delete ownerId={} residentId={} paymentCleanupMs={} residentDeleteMs={} serviceDurationMs={}",
+				owner.getId(), id, paymentCleanupDurationMs, residentDeleteDurationMs, elapsedMs(startedAt));
+	}
+
+	private long elapsedMs(long startedAt) {
+		return (System.nanoTime() - startedAt) / 1_000_000;
 	}
 
 	public void uploadPhoto(OwnerAccount owner, Long id, MultipartFile file) {

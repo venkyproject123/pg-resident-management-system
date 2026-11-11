@@ -14,18 +14,22 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import com.pg_management.observability.ApiRequestTimingFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
 	@Bean
-	PasswordEncoder passwordEncoder() {
-		return new BCryptPasswordEncoder(12);
+	PasswordEncoder passwordEncoder(
+			@Value("${app.logging.slow-request-threshold-ms:1000}") long slowOperationThresholdMs) {
+		return new TimedPasswordEncoder(new BCryptPasswordEncoder(12), slowOperationThresholdMs);
 	}
 
 	@Bean
@@ -46,11 +50,14 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	SecurityFilterChain securityFilterChain(
+			HttpSecurity http,
+			@Value("${app.logging.slow-request-threshold-ms:1000}") long slowRequestThresholdMs) throws Exception {
 		http
 			.cors(Customizer.withDefaults())
 			.csrf(AbstractHttpConfigurer::disable)
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+			.addFilterBefore(new ApiRequestTimingFilter(slowRequestThresholdMs), BasicAuthenticationFilter.class)
 			.authorizeHttpRequests(requests -> requests
 					.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 					.requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
