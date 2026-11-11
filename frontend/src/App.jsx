@@ -117,7 +117,7 @@ function residentToForm(resident) {
   return {
     name: resident.name,
     fatherName: resident.fatherName,
-    mobileNumber: resident.mobileNumber,
+    mobileNumber: resident.mobileNumber?.replace(/^\+91/, "") || "",
     roomNumber: resident.roomNumber,
     sharing: resident.sharing ? String(resident.sharing) : "",
     rent: String(resident.rent),
@@ -129,7 +129,7 @@ function residentToForm(resident) {
 }
 
 function sharingLabel(sharing) {
-  return sharing === 1 ? "Single sharing" : `${sharing} sharing`;
+  return `${sharing} sharing`;
 }
 
 function readSavedSession() {
@@ -164,7 +164,7 @@ function App() {
   const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
   const [pendingOwners, setPendingOwners] = useState([]);
   const [approvedOwners, setApprovedOwners] = useState([]);
-  const [authMode, setAuthMode] = useState("LOGIN");
+  const [authMode, setAuthMode] = useState("LANDING");
   const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", location: "", mobileNumber: "" });
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
   const [registrationCredentials, setRegistrationCredentials] = useState(null);
@@ -502,6 +502,7 @@ function App() {
     setFormOpen(false);
     setError("");
     setNotice("");
+    setAuthMode("LANDING");
     setDocumentResident(null);
     setDocumentPreview(null);
   }
@@ -523,6 +524,24 @@ function App() {
       setRooms((currentRooms) => [...currentRooms, room]);
       setRoomForm({ roomNumber: "", sharing: "" });
       setNotice(`Room ${room.roomNumber} added.`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteRoom(roomNumber) {
+    if (!window.confirm(`Delete room ${roomNumber}? This cannot be undone.`)) return;
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await request(`${RESIDENTS_API}/rooms/${encodeURIComponent(roomNumber)}`, credentials, { method: "DELETE" });
+      setRooms((currentRooms) => currentRooms.filter(
+        (room) => room.roomNumber.toLocaleLowerCase() !== roomNumber.toLocaleLowerCase()
+      ));
+      setNotice(`Room ${roomNumber} deleted.`);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -572,6 +591,15 @@ function App() {
   function showMonthlyPayments() {
     setEmptyBedsOpen(false);
     setMonthlyPaymentsOpen((open) => !open);
+    setSearchText("");
+    setError("");
+    setNotice("");
+  }
+
+  function goToDashboardHome() {
+    setEmptyBedsOpen(false);
+    setMonthlyPaymentsOpen(false);
+    setSelectedStatus("ACTIVE");
     setSearchText("");
     setError("");
     setNotice("");
@@ -843,7 +871,8 @@ function App() {
 
   function updateForm(event) {
     const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    const nextValue = name === "mobileNumber" ? value.replace(/\D/g, "").slice(0, 10) : value;
+    setForm((current) => ({ ...current, [name]: nextValue }));
   }
 
   if (authRestoring) {
@@ -865,6 +894,7 @@ function App() {
               setAdminLoginForm({ username: "", password: "" });
               setPendingOwners([]);
               setApprovedOwners([]);
+              setAuthMode("LANDING");
               setError("");
               setNotice("");
             }}>Admin sign out</button>
@@ -929,10 +959,61 @@ function App() {
       );
     }
 
+    if (authMode === "LANDING") {
+      return (
+        <main className="public-landing">
+          <header className="landing-header">
+            <a className="brand" href="/" aria-label="Haven home">
+              <span className="brand-mark">H</span>
+              <span>haven<span className="brand-period">.</span></span>
+            </a>
+            <div className="landing-header-actions">
+              <button type="button" className="button button-light" onClick={() => setAuthMode("ADMIN_LOGIN")}>Admin</button>
+              <button type="button" className="button button-primary" onClick={() => setAuthMode("LOGIN")}>Owner sign in</button>
+            </div>
+          </header>
+          <section className="landing-hero">
+            <div className="landing-copy">
+              <p className="eyebrow">PG MANAGEMENT, MADE SIMPLE</p>
+              <h1>Run your PG with <span>less paperwork.</span></h1>
+              <p className="muted">Keep resident records, room availability, and month-by-month rent payments together in one clear, secure dashboard.</p>
+              <div className="landing-hero-actions">
+                <button type="button" className="button button-primary" onClick={() => setAuthMode("SETUP")}>＋ Register your PG</button>
+                <button type="button" className="button button-light" onClick={() => setAuthMode("LOGIN")}>Sign in to your dashboard</button>
+              </div>
+              <p className="landing-approval-note">New owner accounts require administrator approval.</p>
+            </div>
+            <div className="landing-preview" aria-label="Dashboard features preview">
+              <div className="landing-preview-top"><span /><span /><span /><strong>Owner dashboard</strong></div>
+              <div className="landing-preview-stat"><span>Active residents</span><strong>All in one place</strong></div>
+              <div className="landing-preview-row"><span className="landing-preview-icon">⌂</span><div><strong>Rooms & beds</strong><small>See available beds at a glance</small></div><b>→</b></div>
+              <div className="landing-preview-row"><span className="landing-preview-icon landing-preview-rent">₹</span><div><strong>Monthly rent</strong><small>Track paid and pending months</small></div><b>→</b></div>
+              <div className="landing-preview-row"><span className="landing-preview-icon landing-preview-docs">✓</span><div><strong>Resident records</strong><small>Store key details and documents</small></div><b>→</b></div>
+            </div>
+          </section>
+          <section className="landing-features" aria-labelledby="landing-features-title">
+            <p className="eyebrow">MADE FOR EVERYDAY PG WORK</p>
+            <h2 id="landing-features-title">The essentials, all together</h2>
+            <div className="landing-feature-grid">
+              <article><span>01</span><h3>Resident management</h3><p>Keep resident details, joining status, and important documents organised.</p></article>
+              <article><span>02</span><h3>Rooms and bed availability</h3><p>Set room sharing and see how many beds are available before assigning residents.</p></article>
+              <article><span>03</span><h3>Monthly rent tracking</h3><p>Check outstanding rent by month and record payments for each month separately.</p></article>
+            </div>
+          </section>
+          <footer className="landing-footer">Haven · A clearer way to manage your PG</footer>
+        </main>
+      );
+    }
+
     return (
       <main className="login-shell">
         <section className="login-card">
-          <a className="brand" href="/" aria-label="Haven home">
+          <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
+            event.preventDefault();
+            setAuthMode("LANDING");
+            setError("");
+            setNotice("");
+          }}>
             <span className="brand-mark">H</span>
             <span>haven<span className="brand-period">.</span></span>
           </a>
@@ -991,12 +1072,21 @@ function App() {
                     : "Use at least 12 characters."}
               </span>
             </label>
-            <label>Mobile number<input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value })} /></label>
+            <label>
+              Mobile number
+              <input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" title="Enter exactly 10 digits, starting with 6, 7, 8, or 9." aria-describedby="owner-mobile-help" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} />
+              <span id="owner-mobile-help" className={`field-help${setupForm.mobileNumber && !/^[6-9][0-9]{9}$/.test(setupForm.mobileNumber) ? " field-help-error" : ""}`} aria-live="polite">
+                {setupForm.mobileNumber && /^[6-9][0-9]{9}$/.test(setupForm.mobileNumber)
+                  ? "Valid 10-digit mobile number."
+                  : "Enter 10 digits starting with 6, 7, 8, or 9."}
+              </span>
+            </label>
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
           </form>}
           {authMode === "LOGIN" && <>
             <button type="button" className="text-action" onClick={() => { setAuthMode("SETUP"); setError(""); setNotice(""); }}>Register your PG</button>
             <button type="button" className="text-action" onClick={() => { setAuthMode("ADMIN_LOGIN"); setError(""); setNotice(""); }}>Admin login</button>
+            <button type="button" className="text-action" onClick={() => { setAuthMode("LANDING"); setError(""); setNotice(""); }}>Back to home</button>
             <p className="login-footnote">Your password is stored as a one-way hash. Contact your administrator if you need help recovering access.</p>
           </>}
           {authMode !== "LOGIN" && authMode !== "REGISTRATION_SUCCESS" && <button type="button" className="text-action" onClick={() => { setAuthMode("LOGIN"); setError(""); setNotice(""); }}>Back to sign in</button>}
@@ -1044,12 +1134,12 @@ function App() {
         roomNumber: room.roomNumber,
         capacity,
         occupied,
+        residentCount: room.residents.length,
         vacant: Math.max(capacity - occupied, 0)
       };
     })
     .filter((room) => room !== null)
     .filter((room) => room.roomNumber.toLocaleLowerCase().includes(roomSearchText.trim().toLocaleLowerCase()))
-    .filter((room) => room.vacant > 0)
     .sort((first, second) => first.roomNumber.localeCompare(second.roomNumber, undefined, { numeric: true }));
   const totalEmptyBeds = Array.from(roomGroups.values()).reduce((total, room) => {
     if (!Number.isInteger(room.capacity)) return total;
@@ -1068,12 +1158,16 @@ function App() {
   return (
     <main className="dashboard">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Haven home">
+        <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
+          event.preventDefault();
+          goToDashboardHome();
+        }}>
           <span className="brand-mark">H</span>
           <span>haven<span className="brand-period">.</span></span>
         </a>
         <div className="topbar-right">
           <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
+          <button className="button button-primary" type="button" onClick={goToDashboardHome}>Home</button>
           <button className="button button-light" onClick={openProfileSettings}>PG settings</button>
           <button className="button button-light" onClick={logout}>Sign out</button>
         </div>
@@ -1130,7 +1224,7 @@ function App() {
                 Sharing capacity
                 <select required value={roomForm.sharing} onChange={(event) => setRoomForm({ ...roomForm, sharing: event.target.value })}>
                   <option value="">Select sharing</option>
-                  <option value="1">Single sharing</option>
+                  <option value="1">1 sharing</option>
                   <option value="2">2 sharing</option>
                   <option value="3">3 sharing</option>
                   <option value="4">4 sharing</option>
@@ -1146,8 +1240,8 @@ function App() {
           {roomAvailability.length === 0 ? (
             <p className="room-availability-empty">
               {roomSearchText.trim()
-                ? "No rooms with available beds match this search."
-                : "No available beds found. Add rooms with their sharing capacity to track vacancies."}
+                ? "No rooms match this search."
+                : "No rooms added yet. Add rooms with their sharing capacity to track vacancies."}
             </p>
           ) : (
             <div className="room-availability-grid">
@@ -1155,8 +1249,17 @@ function App() {
                 <article className={`room-availability-card${room.vacant > 0 ? " room-has-vacancy" : ""}`} key={room.roomNumber.toLocaleLowerCase()}>
                   <div className="room-card-heading">
                     <strong>Room {room.roomNumber} ({sharingLabel(room.capacity)})</strong>
+                    {rooms.some((configuredRoom) => configuredRoom.roomNumber.toLocaleLowerCase() === room.roomNumber.toLocaleLowerCase()) && (
+                      <button
+                        type="button"
+                        className="room-delete-button"
+                        disabled={loading || room.residentCount > 0}
+                        title={room.residentCount > 0 ? "This room has resident records and cannot be deleted." : `Delete room ${room.roomNumber}`}
+                        onClick={() => deleteRoom(room.roomNumber)}
+                      >Delete room</button>
+                    )}
                   </div>
-                  <p>Available beds: {room.vacant}</p>
+                  <p>{room.occupied} occupied · {room.vacant} available</p>
                 </article>
               ))}
             </div>
@@ -1466,13 +1569,21 @@ function App() {
                     <label>Full name<input name="name" maxLength="100" required value={form.name} onChange={updateForm} /></label>
                     <label>Father’s name<input name="fatherName" maxLength="100" required value={form.fatherName} onChange={updateForm} /></label>
                   </div>
-                  <label>Mobile number<input type="tel" name="mobileNumber" maxLength="20" required value={form.mobileNumber} onChange={updateForm} /></label>
+                  <label>
+                    Mobile number
+                    <input type="tel" name="mobileNumber" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" title="Enter exactly 10 digits, starting with 6, 7, 8, or 9." aria-describedby="resident-mobile-help" required value={form.mobileNumber} onChange={updateForm} />
+                    <span id="resident-mobile-help" className={`field-help${form.mobileNumber && !/^[6-9][0-9]{9}$/.test(form.mobileNumber) ? " field-help-error" : ""}`} aria-live="polite">
+                      {form.mobileNumber && /^[6-9][0-9]{9}$/.test(form.mobileNumber)
+                        ? "Valid 10-digit mobile number."
+                        : "Enter 10 digits starting with 6, 7, 8, or 9."}
+                    </span>
+                  </label>
                   <div className="form-row">
                     <label>Room number<input name="roomNumber" maxLength="30" required value={form.roomNumber} onChange={updateForm} /></label>
                     <label>Sharing size
                       <select name="sharing" required value={form.sharing} onChange={updateForm}>
                         <option value="">Select sharing</option>
-                        <option value="1">Single sharing</option>
+                        <option value="1">1 sharing</option>
                         <option value="2">2 sharing</option>
                         <option value="3">3 sharing</option>
                         <option value="4">4 sharing</option>

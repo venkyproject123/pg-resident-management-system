@@ -63,7 +63,9 @@ public class OwnerAuthController {
 			@NotBlank @Size(min = 12, max = 128) String password,
 			@NotBlank @Size(max = 100) String pgName,
 			@NotBlank @Size(max = 150) String location,
-			@NotBlank @Pattern(regexp = "^(?:[6-9][0-9]{9}|\\+91[6-9][0-9]{9}|\\+[1-9][0-9]{7,14})$") String mobileNumber) {
+			@NotBlank @Pattern(
+					regexp = "^[6-9][0-9]{9}$",
+					message = "must be a 10-digit mobile number starting with 6, 7, 8, or 9") String mobileNumber) {
 	}
 
 }

@@ -98,7 +98,7 @@ class ResidentControllerTests {
 								{
 								  "name": "Sample Resident",
 								  "fatherName": "Sample Father",
-								  "mobileNumber": "+919876543210",
+								  "mobileNumber": "9876543210",
 								  "roomNumber": "A-101",
 								  "sharing": 2,
 								  "rent": 12000.00,
@@ -122,6 +122,14 @@ class ResidentControllerTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].roomNumber").value("101"))
 				.andExpect(jsonPath("$[0].sharing").value(2));
+	}
+
+	@Test
+	void ownerCanDeleteConfiguredRoom() throws Exception {
+		mockMvc.perform(delete("/api/residents/rooms/101").header("Authorization", AUTHORIZATION))
+				.andExpect(status().isNoContent());
+
+		verify(roomService).delete(any(OwnerAccount.class), eq("101"));
 	}
 
 	@Test
@@ -170,8 +178,30 @@ class ResidentControllerTests {
 								{
 								  "name": "Sample Resident",
 								  "fatherName": "Sample Father",
-								  "mobileNumber": "+919876543210",
+								  "mobileNumber": "9876543210",
 								  "roomNumber": "A-101",
+								  "rent": 12000.00,
+								  "advanceAmount": 24000.00,
+								  "joiningDate": "2026-10-01",
+								  "permanentAddress": "Sample permanent address",
+								  "companyAddress": "Sample company address"
+								}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void createResidentRejectsMobileNumberWithInvalidLengthOrPrefix() throws Exception {
+		mockMvc.perform(post("/api/residents/post")
+						.header("Authorization", AUTHORIZATION)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "Sample Resident",
+								  "fatherName": "Sample Father",
+								  "mobileNumber": "5987654321",
+								  "roomNumber": "A-101",
+								  "sharing": 2,
 								  "rent": 12000.00,
 								  "advanceAmount": 24000.00,
 								  "joiningDate": "2026-10-01",
@@ -244,7 +274,7 @@ class ResidentControllerTests {
 								{
 								  "name": "Sample Resident",
 								  "fatherName": "Sample Father",
-								  "mobileNumber": "+919876543210",
+								  "mobileNumber": "9876543210",
 								  "roomNumber": "A-101",
 								  "sharing": 2,
 								  "rent": 12000.00,

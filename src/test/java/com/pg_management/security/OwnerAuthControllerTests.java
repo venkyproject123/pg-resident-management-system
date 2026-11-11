@@ -80,6 +80,22 @@ class OwnerAuthControllerTests {
 	}
 
 	@Test
+	void ownerRegistrationRejectsInvalidMobileNumber() throws Exception {
+		mockMvc.perform(post("/api/owner/setup")
+						.contentType("application/json")
+						.content("""
+								{
+								  "username": "new-owner",
+								  "password": "a-long-owner-password",
+								  "pgName": "Sample PG",
+								  "location": "Madhapur, Hyderabad",
+								  "mobileNumber": "5987654321"
+								}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void errorDispatchDoesNotRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/error").with(request -> {
 			request.setDispatcherType(DispatcherType.ERROR);

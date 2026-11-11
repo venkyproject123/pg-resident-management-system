@@ -77,6 +77,35 @@ class RoomServiceTests {
 		assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
 	}
 
+	@Test
+	void deletesRoomWhenNoActiveResidentsOccupyIt() {
+		when(owner.getId()).thenReturn(7L);
+		OwnerRoom room = new OwnerRoom(owner, "101", 2);
+		when(ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
+				.thenReturn(Optional.of(room));
+		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
+				.thenReturn(List.of());
+
+		roomService.delete(owner, " 101 ");
+
+		verify(ownerRoomRepository).delete(room);
+	}
+
+	@Test
+	void preventsDeletingRoomWithActiveResidents() {
+		when(owner.getId()).thenReturn(7L);
+		when(ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
+				.thenReturn(Optional.of(new OwnerRoom(owner, "101", 2)));
+		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
+				.thenReturn(List.of(resident()));
+
+		ResponseStatusException exception = assertThrows(
+				ResponseStatusException.class,
+				() -> roomService.delete(owner, "101"));
+
+		assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+	}
+
 	private Resident resident() {
 		return new Resident(owner, "Resident", "Parent", null, "101", 2,
 				java.math.BigDecimal.ONE, java.math.BigDecimal.ZERO,

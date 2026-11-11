@@ -52,4 +52,17 @@ public class RoomService {
 		OwnerRoom room = ownerRoomRepository.saveAndFlush(new OwnerRoom(owner, roomNumber, request.sharing()));
 		return RoomResponse.from(room);
 	}
+
+	public void delete(OwnerAccount owner, String roomNumber) {
+		OwnerRoom room = ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(
+				owner.getId(), roomNumber.trim())
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
+		boolean hasResidentRecords = !residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(
+				owner.getId(), room.getRoomNumber()).isEmpty();
+		if (hasResidentRecords) {
+			throw new ResponseStatusException(
+					HttpStatus.CONFLICT, "This room has resident records and cannot be deleted");
+		}
+		ownerRoomRepository.delete(room);
+	}
 }

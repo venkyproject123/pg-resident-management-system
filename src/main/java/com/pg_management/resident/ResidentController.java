@@ -94,6 +94,12 @@ public class ResidentController {
 		return ResponseEntity.created(URI.create("/api/residents/rooms")).body(room);
 	}
 
+	@DeleteMapping("/rooms/{roomNumber}")
+	public ResponseEntity<Void> deleteRoom(Authentication authentication, @PathVariable String roomNumber) {
+		roomService.delete(owner(authentication), roomNumber);
+		return ResponseEntity.noContent().build();
+	}
+
 	@GetMapping("/status/{status}")
 	public List<ResidentResponse> findByStatus(Authentication authentication, @PathVariable ResidentStatus status) {
 		return residentService.findByStatus(owner(authentication), status);

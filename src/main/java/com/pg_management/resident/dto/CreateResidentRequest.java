@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Max;
 public record CreateResidentRequest(
 		@NotBlank @Size(max = 100) String name,
 		@NotBlank @Size(max = 100) String fatherName,
-		@NotBlank @Pattern(regexp = "^\\+?[0-9]{7,15}$") String mobileNumber,
+		@NotBlank @Pattern(regexp = "^[6-9][0-9]{9}$", message = "must be a 10-digit mobile number starting with 6, 7, 8, or 9") String mobileNumber,
 		@NotBlank @Size(max = 30) String roomNumber,
 		@NotNull @Min(1) @Max(4) Integer sharing,
 		@NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal rent,
