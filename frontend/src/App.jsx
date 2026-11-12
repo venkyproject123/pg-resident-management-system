@@ -1252,9 +1252,9 @@ function App() {
         </a>
         <div className="topbar-right">
           <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
-          <button className="button button-primary dashboard-nav-button" type="button" onClick={goToDashboardHome}>Home</button>
-          <button className="button button-light dashboard-nav-button" onClick={openProfileSettings}>PG settings</button>
-          <button className="button button-light dashboard-nav-button" onClick={logout}>Sign out</button>
+          <button className="button button-primary" type="button" onClick={goToDashboardHome}>Home</button>
+          <button className="button button-primary" onClick={openProfileSettings}>PG settings</button>
+          <button className="button button-primary" onClick={logout}>Sign out</button>
         </div>
       </header>
 
@@ -1266,11 +1266,11 @@ function App() {
             <p className="muted">A clear view of the people who call your PG home.</p>
           </div>
           <div className="page-heading-actions">
-            <button className="button button-primary dashboard-nav-button" onClick={startCreate}>＋ Add resident</button>
-            <button className="button button-primary dashboard-nav-button" type="button" aria-expanded={monthlyPaymentsOpen} aria-controls="monthly-payments" onClick={showMonthlyPayments}>
+            <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
+            <button className="button button-primary" type="button" aria-expanded={monthlyPaymentsOpen} aria-controls="monthly-payments" onClick={showMonthlyPayments}>
               {monthlyPaymentsOpen ? "Hide payments" : "Manage payments"}
             </button>
-            <button className="button button-primary dashboard-nav-button" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => {
+            <button className="button button-primary" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => {
               setMonthlyPaymentsOpen(false);
               setEmptyBedsOpen((open) => !open);
             }}>
