@@ -38,7 +38,10 @@ class RoomServiceTests {
 	void addsRoomWithoutResidents() {
 		when(owner.getId()).thenReturn(7L);
 		when(ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(7L, "101")).thenReturn(Optional.empty());
-		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(7L, "101")).thenReturn(List.of());
+		when(residentRepository.findDistinctSharingByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
+				.thenReturn(List.of());
+		when(residentRepository.countByOwner_IdAndRoomNumberIgnoreCaseAndStatus(
+				7L, "101", ResidentStatus.ACTIVE)).thenReturn(0L);
 		when(ownerRoomRepository.saveAndFlush(any(OwnerRoom.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -65,14 +68,14 @@ class RoomServiceTests {
 	void rejectsRoomCapacityBelowExistingActiveResidents() {
 		when(owner.getId()).thenReturn(7L);
 		when(ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(7L, "101")).thenReturn(Optional.empty());
-		Resident firstResident = resident();
-		Resident secondResident = resident();
-		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
-				.thenReturn(List.of(firstResident, secondResident));
+		when(residentRepository.findDistinctSharingByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
+				.thenReturn(List.of(2));
+		when(residentRepository.countByOwner_IdAndRoomNumberIgnoreCaseAndStatus(
+				7L, "101", ResidentStatus.ACTIVE)).thenReturn(3L);
 
 		ResponseStatusException exception = assertThrows(
 				ResponseStatusException.class,
-				() -> roomService.add(owner, new RoomRequest("101", 1)));
+				() -> roomService.add(owner, new RoomRequest("101", 2)));
 
 		assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
 	}
@@ -83,8 +86,7 @@ class RoomServiceTests {
 		OwnerRoom room = new OwnerRoom(owner, "101", 2);
 		when(ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
 				.thenReturn(Optional.of(room));
-		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
-				.thenReturn(List.of());
+		when(residentRepository.existsByOwner_IdAndRoomNumberIgnoreCase(7L, "101")).thenReturn(false);
 
 		roomService.delete(owner, " 101 ");
 
@@ -96,8 +98,7 @@ class RoomServiceTests {
 		when(owner.getId()).thenReturn(7L);
 		when(ownerRoomRepository.findByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
 				.thenReturn(Optional.of(new OwnerRoom(owner, "101", 2)));
-		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(7L, "101"))
-				.thenReturn(List.of(resident()));
+		when(residentRepository.existsByOwner_IdAndRoomNumberIgnoreCase(7L, "101")).thenReturn(true);
 
 		ResponseStatusException exception = assertThrows(
 				ResponseStatusException.class,
@@ -106,9 +107,4 @@ class RoomServiceTests {
 		assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
 	}
 
-	private Resident resident() {
-		return new Resident(owner, "Resident", "Parent", null, "101", 2,
-				java.math.BigDecimal.ONE, java.math.BigDecimal.ZERO,
-				java.time.LocalDate.of(2026, 1, 1), "Address", "Company");
-	}
 }

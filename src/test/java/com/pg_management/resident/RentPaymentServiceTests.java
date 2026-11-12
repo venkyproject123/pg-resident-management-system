@@ -106,12 +106,15 @@ class RentPaymentServiceTests {
 		org.springframework.test.util.ReflectionTestUtils.setField(pastResident, "id", 11L);
 		org.springframework.test.util.ReflectionTestUtils.setField(
 				pastResident, "vacatedDate", month.minusMonths(1).atEndOfMonth());
-		RentPayment paidPayment = new RentPayment(residentOne, month.getYear(), month.getMonthValue());
-		paidPayment.markPaid(new BigDecimal("8000.00"), today, RentPaymentMethod.UPI);
-		when(residentRepository.findAllByOwner_IdOrderByRoomNumberAscNameAsc(4L))
-				.thenReturn(List.of(residentOne, residentTwo, futureResident, pastResident));
-		when(rentPaymentRepository.findAllByResident_Owner_IdAndPeriodYearAndPeriodMonth(
-				4L, month.getYear(), month.getMonthValue())).thenReturn(List.of(paidPayment));
+		when(residentRepository.findMonthlyRentResidents(
+				4L, month.atDay(1), today, ResidentStatus.VACATED))
+				.thenReturn(List.of(
+						new MonthlyRentResident(8L, "Resident One", "101", 2, "+919876543210",
+								new BigDecimal("12000.00"), residentOne.getJoiningDate()),
+						new MonthlyRentResident(9L, "Resident Two", "102", 3, "+919876543211",
+								new BigDecimal("5000.00"), residentTwo.getJoiningDate())));
+		when(rentPaymentRepository.findAmountsByOwnerAndPeriod(4L, month.getYear(), month.getMonthValue()))
+				.thenReturn(List.of(new MonthlyRentPaymentAmount(8L, true, new BigDecimal("8000.00"))));
 		RentPaymentService service = new RentPaymentService(residentRepository, rentPaymentRepository);
 
 		var report = service.findMonthlyPayments(owner, month.getYear(), month.getMonthValue());

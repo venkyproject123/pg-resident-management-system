@@ -15,6 +15,19 @@ public interface RentPaymentRepository extends JpaRepository<RentPayment, Long> 
 	List<RentPayment> findAllByResident_Owner_IdAndPeriodYearAndPeriodMonth(
 			Long ownerId, int year, int month);
 
+	@org.springframework.data.jpa.repository.Query("""
+			select new com.pg_management.resident.MonthlyRentPaymentAmount(
+				payment.resident.id, payment.paid, payment.amount)
+			from RentPayment payment
+			where payment.resident.owner.id = :ownerId
+			  and payment.periodYear = :year
+			  and payment.periodMonth = :month
+			""")
+	List<MonthlyRentPaymentAmount> findAmountsByOwnerAndPeriod(
+			@org.springframework.data.repository.query.Param("ownerId") Long ownerId,
+			@org.springframework.data.repository.query.Param("year") int year,
+			@org.springframework.data.repository.query.Param("month") int month);
+
 	Optional<RentPayment> findByResidentAndPeriodYearAndPeriodMonth(
 			Resident resident, int periodYear, int periodMonth);
 

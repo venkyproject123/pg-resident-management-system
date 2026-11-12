@@ -59,6 +59,9 @@ class ResidentControllerTests {
 	private ResidentService residentService;
 
 	@MockitoBean
+	private OwnerDashboardService ownerDashboardService;
+
+	@MockitoBean
 	private RentPaymentService rentPaymentService;
 
 	@MockitoBean
@@ -122,6 +125,42 @@ class ResidentControllerTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].roomNumber").value("101"))
 				.andExpect(jsonPath("$[0].sharing").value(2));
+	}
+
+	@Test
+	void ownerCanRequestPaginatedResidentDirectory() throws Exception {
+		when(residentService.findPage(any(OwnerAccount.class), eq(1), eq(10), eq("sam"), eq(ResidentStatus.ACTIVE)))
+				.thenReturn(new ResidentPageResponse(List.of(sampleResident()), 1, 10, 11, 2, false, true));
+
+		mockMvc.perform(get("/api/residents/page")
+						.param("page", "1")
+						.param("size", "10")
+						.param("keyword", "sam")
+						.param("status", "ACTIVE")
+						.header("Authorization", AUTHORIZATION))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].name").value("Sample Resident"))
+				.andExpect(jsonPath("$.page").value(1))
+				.andExpect(jsonPath("$.totalElements").value(11))
+				.andExpect(jsonPath("$.totalPages").value(2));
+	}
+
+	@Test
+	void ownerCanRequestDashboardSummary() throws Exception {
+		when(ownerDashboardService.findSummary(any(OwnerAccount.class), eq(2026), eq(11)))
+				.thenReturn(new OwnerDashboardSummary(
+						10, 8, 2, 4, 12, 8, 4,
+						new BigDecimal("4000.00"), new BigDecimal("8000.00"), "2026-01", List.of()));
+
+		mockMvc.perform(get("/api/residents/dashboard")
+						.param("year", "2026")
+						.param("month", "11")
+						.header("Authorization", AUTHORIZATION))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalResidents").value(10))
+				.andExpect(jsonPath("$.availableBeds").value(4))
+				.andExpect(jsonPath("$.pendingRentAmount").value(4000.00))
+				.andExpect(jsonPath("$.monthlyRentCollection").value(8000.00));
 	}
 
 	@Test

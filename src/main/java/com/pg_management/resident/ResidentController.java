@@ -41,16 +41,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class ResidentController {
 
 	private final ResidentService residentService;
+	private final OwnerDashboardService ownerDashboardService;
 	private final RoomService roomService;
 	private final RentPaymentService rentPaymentService;
 	private final OwnerAccountRepository ownerAccountRepository;
 
 	public ResidentController(
 			ResidentService residentService,
+			OwnerDashboardService ownerDashboardService,
 			RoomService roomService,
 			RentPaymentService rentPaymentService,
 			OwnerAccountRepository ownerAccountRepository) {
 		this.residentService = residentService;
+		this.ownerDashboardService = ownerDashboardService;
 		this.roomService = roomService;
 		this.rentPaymentService = rentPaymentService;
 		this.ownerAccountRepository = ownerAccountRepository;
@@ -72,6 +75,25 @@ public class ResidentController {
 	@GetMapping("/all")
 	public List<ResidentResponse> findAllMembers(Authentication authentication) {
 		return residentService.findAllMembers(owner(authentication));
+	}
+
+	@GetMapping("/page")
+	public ResidentPageResponse findPage(
+			Authentication authentication,
+			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(0) int page,
+			@RequestParam(defaultValue = "20") @jakarta.validation.constraints.Min(1)
+			@jakarta.validation.constraints.Max(100) int size,
+			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100) String keyword,
+			@RequestParam(required = false) ResidentStatus status) {
+		return residentService.findPage(owner(authentication), page, size, keyword, status);
+	}
+
+	@GetMapping("/dashboard")
+	public OwnerDashboardSummary dashboard(
+			Authentication authentication,
+			@RequestParam @jakarta.validation.constraints.Min(2000) @jakarta.validation.constraints.Max(2200) int year,
+			@RequestParam @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(12) int month) {
+		return ownerDashboardService.findSummary(owner(authentication), year, month);
 	}
 
 	@GetMapping("/monthly-payments")

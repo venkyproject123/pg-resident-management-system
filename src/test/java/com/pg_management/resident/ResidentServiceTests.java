@@ -17,6 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.pg_management.resident.dto.UpdateResidentRequest;
@@ -51,6 +54,25 @@ class ResidentServiceTests {
 	}
 
 	@Test
+	void directoryReturnsServerPageMetadata() {
+		Resident resident = createResident();
+		when(residentRepository.searchPageByOwnerId(
+				org.mockito.ArgumentMatchers.eq(3L),
+				org.mockito.ArgumentMatchers.eq(ResidentStatus.ACTIVE),
+				org.mockito.ArgumentMatchers.eq("Resident"),
+				org.mockito.ArgumentMatchers.any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of(resident), PageRequest.of(1, 20), 21));
+
+		ResidentPageResponse response = residentService.findPage(owner, 1, 20, " Resident ", ResidentStatus.ACTIVE);
+
+		assertEquals(1, response.page());
+		assertEquals(20, response.size());
+		assertEquals(21, response.totalElements());
+		assertEquals(2, response.totalPages());
+		assertEquals(1, response.content().size());
+	}
+
+	@Test
 	void updateChangesResidentDetails() {
 		Resident resident = createResident();
 		when(residentRepository.findByIdAndOwner_Id(7L, 3L)).thenReturn(Optional.of(resident));
@@ -77,12 +99,8 @@ class ResidentServiceTests {
 
 	@Test
 	void createRejectsSharingCapacityThatConflictsWithRoom() {
-		Resident currentRoomResident = new Resident(
-				owner, "Existing Resident", "Father", "+919876543210", "101", 2,
-				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
-				"Address", "Company");
-		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(3L, "101"))
-				.thenReturn(List.of(currentRoomResident));
+		when(residentRepository.findDistinctSharingByOwner_IdAndRoomNumberIgnoreCase(3L, "101"))
+				.thenReturn(List.of(2));
 		CreateResidentRequest request = new CreateResidentRequest(
 				"New Resident", "Father", "+919876543211", "101", 3,
 				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
@@ -113,16 +131,10 @@ class ResidentServiceTests {
 
 	@Test
 	void createRejectsMoreActiveResidentsThanRoomCapacity() {
-		Resident firstResident = new Resident(
-				owner, "First Resident", "Father", "+919876543210", "101", 2,
-				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
-				"Address", "Company");
-		Resident secondResident = new Resident(
-				owner, "Second Resident", "Father", "+919876543211", "101", 2,
-				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),
-				"Address", "Company");
-		when(residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(3L, "101"))
-				.thenReturn(List.of(firstResident, secondResident));
+		when(residentRepository.findDistinctSharingByOwner_IdAndRoomNumberIgnoreCase(3L, "101"))
+				.thenReturn(List.of(2));
+		when(residentRepository.countByOwner_IdAndRoomNumberIgnoreCaseAndStatus(
+				3L, "101", ResidentStatus.ACTIVE)).thenReturn(2L);
 		CreateResidentRequest request = new CreateResidentRequest(
 				"Third Resident", "Father", "+919876543212", "101", 2,
 				new BigDecimal("12000.00"), BigDecimal.ZERO, LocalDate.of(2026, 10, 1),

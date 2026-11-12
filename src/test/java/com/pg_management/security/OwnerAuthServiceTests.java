@@ -45,8 +45,8 @@ class OwnerAuthServiceTests {
 
 	@Test
 	void registrationCreatesAnUnapprovedOwnerWithoutOtp() {
-		when(ownerAccountRepository.findByUsername("new-owner")).thenReturn(Optional.empty());
-		when(ownerAccountRepository.findByMobileNumber("+919876543210")).thenReturn(Optional.empty());
+		when(ownerAccountRepository.existsByUsername("new-owner")).thenReturn(false);
+		when(ownerAccountRepository.existsByMobileNumber("+919876543210")).thenReturn(false);
 		when(ownerAccountRepository.saveAndFlush(any(OwnerAccount.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
 

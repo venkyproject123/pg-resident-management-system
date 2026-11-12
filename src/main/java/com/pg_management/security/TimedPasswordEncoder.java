@@ -18,7 +18,12 @@ public class TimedPasswordEncoder implements PasswordEncoder {
 
 	@Override
 	public String encode(CharSequence rawPassword) {
-		return delegate.encode(rawPassword);
+		long startedAt = System.nanoTime();
+		try {
+			return delegate.encode(rawPassword);
+		} finally {
+			logDuration("password_hashing", startedAt);
+		}
 	}
 
 	@Override
@@ -27,12 +32,16 @@ public class TimedPasswordEncoder implements PasswordEncoder {
 		try {
 			return delegate.matches(rawPassword, encodedPassword);
 		} finally {
-			long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
-			if (durationMs >= slowOperationThresholdMs) {
-				LOGGER.warn("password_verification durationMs={}", durationMs);
-			} else {
-				LOGGER.info("password_verification durationMs={}", durationMs);
-			}
+			logDuration("password_verification", startedAt);
+		}
+	}
+
+	private void logDuration(String operation, long startedAt) {
+		long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
+		if (durationMs >= slowOperationThresholdMs) {
+			LOGGER.warn("{} durationMs={}", operation, durationMs);
+		} else {
+			LOGGER.info("{} durationMs={}", operation, durationMs);
 		}
 	}
 }

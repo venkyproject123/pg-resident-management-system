@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -96,6 +99,28 @@ public class ResidentService {
 		return roomOrderedResponses(matches);
 	}
 
+	@Transactional(readOnly = true)
+	public ResidentPageResponse findPage(
+			OwnerAccount owner, int page, int size, String keyword, ResidentStatus status) {
+		String searchTerm = keyword == null || keyword.isBlank() ? null : keyword.trim();
+		Page<Resident> residents = residentRepository.searchPageByOwnerId(
+				owner.getId(),
+				status,
+				searchTerm,
+				PageRequest.of(page, size, Sort.by(
+						Sort.Order.asc("roomNumber"),
+						Sort.Order.asc("name"),
+						Sort.Order.asc("id"))));
+		return new ResidentPageResponse(
+				residents.getContent().stream().map(ResidentResponse::from).toList(),
+				residents.getNumber(),
+				residents.getSize(),
+				residents.getTotalElements(),
+				residents.getTotalPages(),
+				residents.isFirst(),
+				residents.isLast());
+	}
+
 	private List<ResidentResponse> roomOrderedResponses(List<Resident> residents) {
 		return residents.stream()
 				.sorted(Comparator.comparing(Resident::getRoomNumber, ResidentService::compareRoomNumbers)
@@ -147,21 +172,18 @@ public class ResidentService {
 					throw new ResponseStatusException(
 							HttpStatus.CONFLICT, "Resident sharing must match the room's configured sharing capacity");
 				});
-		List<Resident> roomResidents = residentRepository.findAllByOwner_IdAndRoomNumberIgnoreCase(
-				owner.getId(), roomNumber);
-		long activeResidents = 0;
-		for (Resident roomResident : roomResidents) {
-			if (roomResident.getId() != null && roomResident.getId().equals(currentResidentId)) {
-				continue;
-			}
-			if (roomResident.getSharing() != null && !roomResident.getSharing().equals(sharing)) {
+		for (Integer existingSharing : residentRepository.findDistinctSharingByOwner_IdAndRoomNumberIgnoreCase(
+				owner.getId(), roomNumber)) {
+			if (existingSharing != null && !existingSharing.equals(sharing)) {
 				throw new ResponseStatusException(
 						HttpStatus.CONFLICT, "All residents in a room must use the same sharing capacity");
 			}
-			if (roomResident.getStatus() == ResidentStatus.ACTIVE) {
-				activeResidents++;
-			}
 		}
+		long activeResidents = currentResidentId == null
+				? residentRepository.countByOwner_IdAndRoomNumberIgnoreCaseAndStatus(
+						owner.getId(), roomNumber, ResidentStatus.ACTIVE)
+				: residentRepository.countByOwner_IdAndRoomNumberIgnoreCaseAndStatusAndIdNot(
+						owner.getId(), roomNumber, ResidentStatus.ACTIVE, currentResidentId);
 		if (currentlyActive) {
 			activeResidents++;
 		}

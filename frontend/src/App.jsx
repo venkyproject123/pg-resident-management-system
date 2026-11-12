@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
@@ -171,12 +171,24 @@ function App() {
   const [registrationApproved, setRegistrationApproved] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ username: "", pgName: "", location: "" });
-  const [allResidents, setAllResidents] = useState([]);
+  const [residentPage, setResidentPage] = useState({
+    content: [],
+    page: 0,
+    size: 20,
+    totalElements: 0,
+    totalPages: 0,
+    first: true,
+    last: true
+  });
+  const [residentPageIndex, setResidentPageIndex] = useState(0);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [residentLoading, setResidentLoading] = useState(false);
+  const [monthlyPaymentsLoading, setMonthlyPaymentsLoading] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [roomForm, setRoomForm] = useState({ roomNumber: "", sharing: "" });
   const [monthlyPaymentReport, setMonthlyPaymentReport] = useState(null);
   const [monthlyPaymentsOpen, setMonthlyPaymentsOpen] = useState(false);
-  const [residentTotals, setResidentTotals] = useState({ active: 0, vacated: 0 });
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
   const [emptyBedsOpen, setEmptyBedsOpen] = useState(false);
@@ -212,18 +224,7 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, [notice]);
 
-  const residents = useMemo(() => {
-    const query = searchText.trim().toLocaleLowerCase();
-    return allResidents.filter((resident) => {
-      const matchesStatus = resident.status === selectedStatus;
-      const matchesQuery = !query || [
-        resident.name,
-        resident.fatherName,
-        resident.roomNumber
-      ].some((value) => value?.toLocaleLowerCase().includes(query));
-      return matchesStatus && matchesQuery;
-    });
-  }, [allResidents, searchText, selectedStatus]);
+  const residents = residentPage.content;
 
   useEffect(() => {
     if (savedSession) {
@@ -232,8 +233,13 @@ function App() {
       const restoreSession = async () => {
         try {
           if (savedSession.type === "owner") {
-            await loadResidents(savedSession.credentials);
+            const profile = await request("/api/owner/profile", savedSession.credentials);
             if (!mounted) return;
+            setProfileForm({
+              username: profile.username,
+              pgName: profile.pgName,
+              location: profile.location || ""
+            });
           } else {
             const overview = await request(
               "/api/admin/owners",
@@ -269,6 +275,74 @@ function App() {
 
     return undefined;
   }, []);
+
+  useEffect(() => {
+    if (!credentials) return undefined;
+    let active = true;
+    const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+    setDashboardLoading(true);
+    request(`${RESIDENTS_API}/dashboard?year=${year}&month=${month}`, credentials)
+      .then((summary) => {
+        if (!active) return;
+        setDashboardSummary(summary);
+        setRooms(summary.rooms);
+      }).catch((requestError) => {
+        if (active) setError(requestError.message);
+      }).finally(() => {
+        if (active) setDashboardLoading(false);
+      });
+    return () => { active = false; };
+  }, [credentials, selectedPaymentPeriod]);
+
+  useEffect(() => {
+    if (!credentials) return undefined;
+    let active = true;
+    setResidentLoading(true);
+    const timeoutId = window.setTimeout(async () => {
+      const params = new URLSearchParams({
+        page: String(residentPageIndex),
+        size: "20",
+        status: selectedStatus
+      });
+      if (searchText.trim()) params.set("keyword", searchText.trim());
+      try {
+        const page = await request(`${RESIDENTS_API}/page?${params}`, credentials);
+        if (!active) return;
+        if (page.content.length === 0 && page.page > 0 && page.page >= page.totalPages) {
+          setResidentPageIndex(page.page - 1);
+          return;
+        }
+        setResidentPage(page);
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      } finally {
+        if (active) setResidentLoading(false);
+      }
+    }, searchText.trim() ? 300 : 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [credentials, residentPageIndex, searchText, selectedStatus]);
+
+  useEffect(() => {
+    if (!credentials || !monthlyPaymentsOpen) return undefined;
+    let active = true;
+    const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+    setMonthlyPaymentsLoading(true);
+    setMonthlyPaymentReport(null);
+    request(`${RESIDENTS_API}/monthly-payments?year=${year}&month=${month}`, credentials)
+      .then((report) => {
+        if (active) setMonthlyPaymentReport(report);
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError.message);
+      })
+      .finally(() => {
+        if (active) setMonthlyPaymentsLoading(false);
+      });
+    return () => { active = false; };
+  }, [credentials, monthlyPaymentsOpen, selectedPaymentPeriod]);
 
   useEffect(() => {
     if (authMode !== "REGISTRATION_SUCCESS" || !registrationCredentials || registrationApproved) return undefined;
@@ -309,20 +383,42 @@ function App() {
     };
   }, [authMode, registrationCredentials, registrationApproved]);
 
-  async function loadResidents(owner, period = selectedPaymentPeriod) {
-    const [year, month] = period.split("-").map(Number);
-    const [allResidents, rooms, monthlyPaymentReport] = await Promise.all([
-      request(`${RESIDENTS_API}/all`, owner),
-      request(`${RESIDENTS_API}/rooms`, owner),
-      request(`${RESIDENTS_API}/monthly-payments?year=${year}&month=${month}`, owner)
-    ]);
-    setAllResidents(allResidents);
-    setRooms(rooms);
-    setMonthlyPaymentReport(monthlyPaymentReport);
-    setResidentTotals({
-      active: allResidents.filter((resident) => resident.status === "ACTIVE").length,
-      vacated: allResidents.filter((resident) => resident.status === "VACATED").length
+  async function loadResidents(owner, page = residentPageIndex, keyword = searchText, status = selectedStatus) {
+    const params = new URLSearchParams({
+      page: String(page),
+      size: "20",
+      status
     });
+    if (keyword.trim()) params.set("keyword", keyword.trim());
+    const result = await request(`${RESIDENTS_API}/page?${params}`, owner);
+    setResidentPage(result);
+    setResidentPageIndex(
+      result.content.length === 0 && result.page > 0 && result.page >= result.totalPages
+        ? result.page - 1
+        : result.page
+    );
+    return result;
+  }
+
+  async function loadDashboard(owner, period = selectedPaymentPeriod) {
+    const [year, month] = period.split("-").map(Number);
+    const summary = await request(`${RESIDENTS_API}/dashboard?year=${year}&month=${month}`, owner);
+    setDashboardSummary(summary);
+    setRooms(summary.rooms);
+  }
+
+  async function loadMonthlyPayments(owner, period = selectedPaymentPeriod) {
+    const [year, month] = period.split("-").map(Number);
+    const report = await request(`${RESIDENTS_API}/monthly-payments?year=${year}&month=${month}`, owner);
+    setMonthlyPaymentReport(report);
+  }
+
+  async function refreshOwnerData(owner) {
+    await Promise.all([
+      loadDashboard(owner),
+      loadResidents(owner),
+      monthlyPaymentsOpen ? loadMonthlyPayments(owner) : Promise.resolve()
+    ]);
   }
 
   async function handleLogin(event) {
@@ -330,8 +426,13 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      await loadResidents(loginForm);
+      const profile = await request("/api/owner/profile", loginForm);
       sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "owner", credentials: loginForm }));
+      setProfileForm({
+        username: profile.username,
+        pgName: profile.pgName,
+        location: profile.location || ""
+      });
       setCredentials(loginForm);
       setNotice("");
     } catch (requestError) {
@@ -474,13 +575,22 @@ function App() {
   function logout() {
     sessionStorage.removeItem("haven-auth-session");
     setCredentials(null);
-    setAllResidents([]);
+    setResidentPage({
+      content: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true
+    });
+    setResidentPageIndex(0);
+    setDashboardSummary(null);
     setRooms([]);
     setRoomForm({ roomNumber: "", sharing: "" });
     setMonthlyPaymentReport(null);
     setMonthlyPaymentsOpen(false);
     setLoginForm({ username: "", password: "" });
-    setResidentTotals({ active: 0, vacated: 0 });
     setProfileForm({ username: "", pgName: "", location: "" });
     setSearchText("");
     setSelectedStatus("ACTIVE");
@@ -496,6 +606,7 @@ function App() {
 
   function handleSearch(event) {
     event.preventDefault();
+    setResidentPageIndex(0);
   }
 
   async function addRoom(event) {
@@ -508,7 +619,7 @@ function App() {
         method: "POST",
         body: JSON.stringify({ ...roomForm, sharing: Number(roomForm.sharing) })
       });
-      setRooms((currentRooms) => [...currentRooms, room]);
+      await loadDashboard(credentials);
       setRoomForm({ roomNumber: "", sharing: "" });
       setNotice(`Room ${room.roomNumber} added.`);
     } catch (requestError) {
@@ -525,9 +636,7 @@ function App() {
     setNotice("");
     try {
       await request(`${RESIDENTS_API}/rooms/${encodeURIComponent(roomNumber)}`, credentials, { method: "DELETE" });
-      setRooms((currentRooms) => currentRooms.filter(
-        (room) => room.roomNumber.toLocaleLowerCase() !== roomNumber.toLocaleLowerCase()
-      ));
+      await loadDashboard(credentials);
       setNotice(`Room ${roomNumber} deleted.`);
     } catch (requestError) {
       setError(requestError.message);
@@ -536,34 +645,17 @@ function App() {
     }
   }
 
-  async function loadPaymentPeriod(period) {
-    if (!period || !credentials) return;
-    const [year, month] = period.split("-").map(Number);
-    setLoading(true);
-    setError("");
-    try {
-      const report = await request(
-        `${RESIDENTS_API}/monthly-payments?year=${year}&month=${month}`,
-        credentials);
-      setSelectedPaymentPeriod(period);
-      setMonthlyPaymentReport(report);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function changePaymentPeriod(event) {
-    loadPaymentPeriod(event.target.value);
+    setSelectedPaymentPeriod(event.target.value);
   }
 
   function shiftPaymentPeriod(offset) {
     const [year, month] = selectedPaymentPeriod.split("-").map(Number);
     const shifted = new Date(year, month - 1 + offset, 1);
     const period = `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+    const firstPaymentPeriod = dashboardSummary?.firstPaymentPeriod || "";
     if ((!firstPaymentPeriod || period >= firstPaymentPeriod) && period <= currentPaymentPeriod) {
-      loadPaymentPeriod(period);
+      setSelectedPaymentPeriod(period);
     }
   }
 
@@ -571,6 +663,7 @@ function App() {
     setMonthlyPaymentsOpen(false);
     setSelectedStatus(status);
     setSearchText("");
+    setResidentPageIndex(0);
     setError("");
     setNotice("");
   }
@@ -588,6 +681,7 @@ function App() {
     setMonthlyPaymentsOpen(false);
     setSelectedStatus("ACTIVE");
     setSearchText("");
+    setResidentPageIndex(0);
     setError("");
     setNotice("");
   }
@@ -679,7 +773,7 @@ function App() {
       }
 
       failedStep = "refreshing the resident list";
-      await loadResidents(credentials);
+      await refreshOwnerData(credentials);
       setNotice(
         creatingResident
           ? uploadingFiles
@@ -699,7 +793,7 @@ function App() {
       if (residentDetailsSaved) {
         let refreshError = null;
         try {
-          await loadResidents(credentials);
+          await refreshOwnerData(credentials);
         } catch (followUpError) {
           refreshError = followUpError;
         }
@@ -725,7 +819,7 @@ function App() {
     try {
       await request(`${RESIDENTS_API}/${resident.id}`, credentials, { method: "DELETE" });
       setNotice("Resident marked as vacated successfully. Their history has been preserved.");
-      await loadResidents(credentials);
+      await refreshOwnerData(credentials);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -743,7 +837,7 @@ function App() {
     try {
       await request(`${RESIDENTS_API}/${resident.id}/permanent`, credentials, { method: "DELETE" });
       setNotice("Resident and their documents permanently deleted.");
-      await loadResidents(credentials);
+      await refreshOwnerData(credentials);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -804,7 +898,7 @@ function App() {
         ...payments.filter((payment) => payment.month !== result.month),
         result
       ].sort((first, second) => first.month - second.month));
-      await loadResidents(credentials);
+      await refreshOwnerData(credentials);
       setPaymentDraft(null);
       setNotice(result.wasAlreadyPaid
         ? "Rent payment details updated."
@@ -1069,49 +1163,12 @@ function App() {
   }
 
   const editingResident = residents.find((resident) => resident.id === editingId) || null;
-  const roomGroups = new Map();
-  rooms.forEach((room) => {
-    const key = room.roomNumber.trim().toLocaleLowerCase();
-    roomGroups.set(key, { roomNumber: room.roomNumber, capacity: room.sharing, residents: [] });
-  });
-  allResidents.forEach((resident) => {
-    const key = resident.roomNumber.trim().toLocaleLowerCase();
-    if (!roomGroups.has(key)) {
-      roomGroups.set(key, {
-        roomNumber: resident.roomNumber,
-        capacity: Number.isInteger(resident.sharing) ? resident.sharing : null,
-        residents: []
-      });
-    }
-    const room = roomGroups.get(key);
-    if (!room.capacity && Number.isInteger(resident.sharing)) room.capacity = resident.sharing;
-    room.residents.push(resident);
-  });
-  const roomAvailability = Array.from(roomGroups.values())
-    .map((room) => {
-      const capacity = room.capacity;
-      if (!capacity) return null;
-      const occupied = room.residents.filter((resident) => resident.status === "ACTIVE").length;
-      return {
-        roomNumber: room.roomNumber,
-        capacity,
-        occupied,
-        residentCount: room.residents.length,
-        vacant: Math.max(capacity - occupied, 0)
-      };
-    })
-    .filter((room) => room !== null)
+  const roomAvailability = rooms
     .filter((room) => room.roomNumber.toLocaleLowerCase().includes(roomSearchText.trim().toLocaleLowerCase()))
     .sort((first, second) => first.roomNumber.localeCompare(second.roomNumber, undefined, { numeric: true }));
-  const totalEmptyBeds = Array.from(roomGroups.values()).reduce((total, room) => {
-    if (!Number.isInteger(room.capacity)) return total;
-    const occupied = room.residents.filter((resident) => resident.status === "ACTIVE").length;
-    return total + Math.max(room.capacity - occupied, 0);
-  }, 0);
-  const firstPaymentPeriod = allResidents.reduce((first, resident) => {
-    const joiningPeriod = resident.joiningDate.slice(0, 7);
-    return !first || joiningPeriod < first ? joiningPeriod : first;
-  }, "");
+  const totalEmptyBeds = dashboardSummary?.availableBeds ?? 0;
+  const firstPaymentPeriod = dashboardSummary?.firstPaymentPeriod || "";
+  const pendingPayments = monthlyPaymentReport?.residents.filter((payment) => payment.remaining > 0) || [];
   const currentPaymentPeriod = (() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -1158,6 +1215,48 @@ function App() {
 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
+
+        {dashboardLoading && !dashboardSummary && (
+          <div className="dashboard-loading-note" role="status">Loading your latest dashboard totals…</div>
+        )}
+        {dashboardSummary && <section className="stats-grid" aria-label="Property overview">
+          <article className="stat-card stat-card-static">
+            <span className="stat-icon icon-total">⌂</span>
+            <div><p className="stat-label">Total residents</p><strong>{dashboardSummary.totalResidents}</strong></div>
+          </article>
+          <button className={`stat-card stat-card-button${selectedStatus === "ACTIVE" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ACTIVE"} onClick={() => showResidentsByStatus("ACTIVE")} disabled={loading}>
+            <span className="stat-icon icon-active">✓</span>
+            <div><p className="stat-label">Active residents</p><strong>{dashboardSummary.activeResidents}</strong></div>
+          </button>
+          <button className={`stat-card stat-card-button${selectedStatus === "VACATED" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "VACATED"} onClick={() => showResidentsByStatus("VACATED")} disabled={loading}>
+            <span className="stat-icon icon-vacated">↗</span>
+            <div><p className="stat-label">Vacated residents</p><strong>{dashboardSummary.vacatedResidents}</strong></div>
+          </button>
+          <article className="stat-card stat-card-static">
+            <span className="stat-icon icon-total">▦</span>
+            <div><p className="stat-label">Total rooms</p><strong>{dashboardSummary.totalRooms}</strong></div>
+          </article>
+          <article className="stat-card stat-card-static">
+            <span className="stat-icon icon-total">▤</span>
+            <div><p className="stat-label">Total beds</p><strong>{dashboardSummary.totalBeds}</strong></div>
+          </article>
+          <article className="stat-card stat-card-static">
+            <span className="stat-icon icon-active">●</span>
+            <div><p className="stat-label">Occupied beds</p><strong>{dashboardSummary.occupiedBeds}</strong></div>
+          </article>
+          <article className="stat-card stat-card-static">
+            <span className="stat-icon icon-active">＋</span>
+            <div><p className="stat-label">Available beds</p><strong>{dashboardSummary.availableBeds}</strong></div>
+          </article>
+          <article className="stat-card stat-card-static">
+            <span className="stat-icon icon-pending">₹</span>
+            <div><p className="stat-label">Pending rent for selected month</p><strong>{formatCurrency(dashboardSummary.pendingRentAmount)}</strong></div>
+          </article>
+          <article className="stat-card stat-card-static">
+            <span className="stat-icon icon-active">₹</span>
+            <div><p className="stat-label">Collection for selected month</p><strong>{formatCurrency(dashboardSummary.monthlyRentCollection)}</strong></div>
+          </article>
+        </section>}
 
         {emptyBedsOpen && <section className="room-availability panel" id="room-availability" aria-labelledby="room-availability-title">
           <div className="room-availability-heading">
@@ -1208,10 +1307,10 @@ function App() {
           ) : (
             <div className="room-availability-grid">
               {roomAvailability.map((room) => (
-                <article className={`room-availability-card${room.vacant > 0 ? " room-has-vacancy" : ""}`} key={room.roomNumber.toLocaleLowerCase()}>
+                <article className={`room-availability-card${room.availableBeds > 0 ? " room-has-vacancy" : ""}`} key={room.roomNumber.toLocaleLowerCase()}>
                   <div className="room-card-heading">
-                    <strong>Room {room.roomNumber} ({sharingLabel(room.capacity)})</strong>
-                    {rooms.some((configuredRoom) => configuredRoom.roomNumber.toLocaleLowerCase() === room.roomNumber.toLocaleLowerCase()) && (
+                      <strong>Room {room.roomNumber}{room.sharing ? ` (${sharingLabel(room.sharing)})` : ""}</strong>
+                      {room.configured && (
                       <button
                         type="button"
                         className="room-delete-button"
@@ -1221,7 +1320,7 @@ function App() {
                       >Delete room</button>
                     )}
                   </div>
-                  <p>{room.occupied} occupied · {room.vacant} available</p>
+                  <p>{room.occupied} occupied · {room.sharing ? `${room.availableBeds} available` : "capacity not configured"}</p>
                 </article>
               ))}
             </div>
@@ -1229,17 +1328,6 @@ function App() {
         </section>}
 
         {!emptyBedsOpen && <>
-        <section className="stats-grid" aria-label="Resident totals">
-          <button className={`stat-card stat-card-button${selectedStatus === "ACTIVE" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ACTIVE"} onClick={() => showResidentsByStatus("ACTIVE")} disabled={loading}>
-            <span className="stat-icon icon-active">✓</span>
-            <div><p className="stat-label">Total active members</p><strong>{residentTotals.active}</strong></div>
-          </button>
-          <button className={`stat-card stat-card-button${selectedStatus === "VACATED" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "VACATED"} onClick={() => showResidentsByStatus("VACATED")} disabled={loading}>
-            <span className="stat-icon icon-vacated">↗</span>
-            <div><p className="stat-label">Total vacated members</p><strong>{residentTotals.vacated}</strong></div>
-          </button>
-        </section>
-
         {monthlyPaymentsOpen ? (
           <section className="panel monthly-payments-panel" id="monthly-payments" aria-labelledby="monthly-payments-title">
             <div className="panel-heading">
@@ -1268,6 +1356,9 @@ function App() {
                 </div>
               </div>
             </div>
+            {monthlyPaymentsLoading && !monthlyPaymentReport && (
+              <p className="room-availability-empty" role="status">Loading payments for this month…</p>
+            )}
             {monthlyPaymentReport && <>
               <div className="monthly-payment-totals" aria-label="Monthly rent totals">
                 <article><span>Total rent</span><strong>{formatCurrency(monthlyPaymentReport.totalRent)}</strong></article>
@@ -1277,11 +1368,11 @@ function App() {
               <div className="payment-list-heading">
                 <div>
                   <p className="eyebrow">FOLLOW-UP</p>
-                  <h3>Pending payments <span className="count-pill">{monthlyPaymentReport.residents.filter((payment) => payment.remaining > 0).length}</span></h3>
+                  <h3>Pending payments <span className="count-pill">{pendingPayments.length}</span></h3>
                 </div>
                 <p className="muted">Residents disappear from this list when the selected month is fully paid.</p>
               </div>
-              {monthlyPaymentReport.residents.filter((payment) => payment.remaining > 0).length === 0 ? (
+              {pendingPayments.length === 0 ? (
                 <p className="room-availability-empty">No pending payments for this month.</p>
               ) : (
               <div className="table-wrap">
@@ -1290,18 +1381,21 @@ function App() {
                     <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>MONTHLY RENT</th><th>ACTION</th></tr>
                   </thead>
                   <tbody>
-                    {monthlyPaymentReport.residents.filter((payment) => payment.remaining > 0).map((payment) => (
+                    {pendingPayments.map((payment) => (
                       <tr key={payment.residentId}>
                         <td data-label="Resident">{payment.residentName}</td>
                         <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
                         <td data-label="Mobile">{payment.mobileNumber || "—"}</td>
                         <td data-label="Monthly rent">{formatCurrency(payment.rent)}</td>
                         <td data-label="Action"><button type="button" className="text-action" disabled={loading} onClick={() => {
-                          const resident = allResidents.find((item) => item.id === payment.residentId);
-                          if (resident) {
-                            const [year, month] = selectedPaymentPeriod.split("-").map(Number);
-                            openRentPayments(resident, year, month);
-                          }
+                          const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+                          openRentPayments({
+                            id: payment.residentId,
+                            name: payment.residentName,
+                            roomNumber: payment.roomNumber,
+                            rent: payment.rent,
+                            joiningDate: payment.joiningDate
+                          }, year, month);
                         }}>{payment.collected > 0 ? "Update payment" : "Record payment"}</button></td>
                       </tr>
                     ))}
@@ -1317,19 +1411,26 @@ function App() {
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">DIRECTORY</p>
-                <h2>{searchText.trim() ? "Search results" : selectedStatus === "ACTIVE" ? "Active members" : "Vacated members"} <span className="count-pill">{residents.length}</span></h2>
+                <h2>{searchText.trim() ? "Search results" : selectedStatus === "ACTIVE" ? "Active members" : "Vacated members"} <span className="count-pill">{residentPage.totalElements}</span></h2>
               </div>
               <div className="directory-actions">
                 <form className="search-form" onSubmit={handleSearch}>
                   <span aria-hidden="true" className="search-icon">⌕</span>
                   <input
                     aria-label="Search residents"
-                    placeholder="Search by name or room number"
+                    placeholder="Search by name, father or room"
+                    maxLength="100"
                     value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
+                    onChange={(event) => {
+                      setSearchText(event.target.value);
+                      setResidentPageIndex(0);
+                    }}
                   />
-                  {searchText && <button type="button" className="clear-search" onClick={() => setSearchText("")} aria-label="Clear search">×</button>}
-                  <button type="submit" className="button button-search" disabled={loading}>Search</button>
+                  {searchText && <button type="button" className="clear-search" onClick={() => {
+                    setSearchText("");
+                    setResidentPageIndex(0);
+                  }} aria-label="Clear search">×</button>}
+                  <button type="submit" className="button button-search" disabled={residentLoading}>Search</button>
                 </form>
               </div>
             </div>
@@ -1354,7 +1455,9 @@ function App() {
               </section>
             </div>}
 
-            {residents.length === 0 ? (
+            {residentLoading && residents.length === 0 ? (
+              <div className="directory-loading" role="status">Loading residents…</div>
+            ) : residents.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-illustration">⌂</div>
                 <h3>{searchText.trim() ? "No matching residents" : "Your directory is ready"}</h3>
@@ -1442,6 +1545,27 @@ function App() {
                 </table>
               </div>
             )}
+            {!residentLoading && residentPage.totalElements > 0 && <div className="table-pagination">
+              <span>
+                Showing {residentPage.page * residentPage.size + 1}–{residentPage.page * residentPage.size + residents.length}
+                {" "}of {residentPage.totalElements} residents
+              </span>
+              <div>
+                <button
+                  type="button"
+                  className="button button-light"
+                  disabled={residentPage.first || residentLoading}
+                  onClick={() => setResidentPageIndex((page) => Math.max(page - 1, 0))}
+                >Previous</button>
+                <span>Page {residentPage.page + 1} of {Math.max(residentPage.totalPages, 1)}</span>
+                <button
+                  type="button"
+                  className="button button-light"
+                  disabled={residentPage.last || residentLoading}
+                  onClick={() => setResidentPageIndex((page) => page + 1)}
+                >Next</button>
+              </div>
+            </div>}
           </article>
 
         </section>
