@@ -132,6 +132,11 @@ function sharingLabel(sharing) {
   return `${sharing} sharing`;
 }
 
+function getCurrentPaymentPeriod() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function readSavedSession() {
   try {
     const value = sessionStorage.getItem("haven-auth-session");
@@ -153,6 +158,8 @@ function App() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+  const currentMonthName = new Date()
+    .toLocaleString(undefined, { month: "long" });
   const [savedSession] = useState(readSavedSession);
   const [credentials, setCredentials] = useState(
     savedSession?.type === "owner" ? savedSession.credentials : null
@@ -211,6 +218,32 @@ function App() {
   const [paymentDraft, setPaymentDraft] = useState(null);
   const photoInput = useRef(null);
   const identityProofInput = useRef(null);
+
+  useEffect(() => {
+    if (!credentials) return undefined;
+
+    const keepDashboardOpen = () => {
+      setMonthlyPaymentsOpen(false);
+      setEmptyBedsOpen(false);
+      setFormOpen(false);
+      setForm(emptyForm);
+      setEditingId(null);
+      setPhotoFile(null);
+      setIdentityProofFile(null);
+      setRentPaymentResident(null);
+      setPaymentDraft(null);
+      setViewerResident(null);
+      setDocumentPreview(null);
+      setDocumentError("");
+      setError("");
+      window.history.pushState({ havenDashboard: true }, "", window.location.href);
+    };
+
+    window.history.pushState({ havenDashboard: true }, "", window.location.href);
+    window.history.pushState({ havenDashboard: true }, "", window.location.href);
+    window.addEventListener("popstate", keepDashboardOpen);
+    return () => window.removeEventListener("popstate", keepDashboardOpen);
+  }, [credentials]);
 
   useEffect(() => {
     return () => {
@@ -279,7 +312,7 @@ function App() {
   useEffect(() => {
     if (!credentials) return undefined;
     let active = true;
-    const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+    const [year, month] = getCurrentPaymentPeriod().split("-").map(Number);
     setDashboardLoading(true);
     request(`${RESIDENTS_API}/dashboard?year=${year}&month=${month}`, credentials)
       .then((summary) => {
@@ -292,7 +325,7 @@ function App() {
         if (active) setDashboardLoading(false);
       });
     return () => { active = false; };
-  }, [credentials, selectedPaymentPeriod]);
+  }, [credentials]);
 
   useEffect(() => {
     if (!credentials) return undefined;
@@ -400,7 +433,7 @@ function App() {
     return result;
   }
 
-  async function loadDashboard(owner, period = selectedPaymentPeriod) {
+  async function loadDashboard(owner, period = getCurrentPaymentPeriod()) {
     const [year, month] = period.split("-").map(Number);
     const summary = await request(`${RESIDENTS_API}/dashboard?year=${year}&month=${month}`, owner);
     setDashboardSummary(summary);
@@ -527,6 +560,32 @@ function App() {
         setApprovedOwners((owners) => [...owners, approvedOwner]);
       }
       setNotice("Owner registration approved. They can now sign in.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function removeOwner(owner) {
+    const confirmed = window.confirm(
+      `Remove ${owner.pgName} (${owner.username}) from Haven? They will no longer be able to sign in. Existing resident and payment records will be preserved.`
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await request(
+        `/api/admin/owners/${owner.id}`,
+        adminCredentials,
+        { method: "DELETE" },
+        "Admin authentication failed. Please sign in again."
+      );
+      setPendingOwners((owners) => owners.filter((item) => item.id !== owner.id));
+      setApprovedOwners((owners) => owners.filter((item) => item.id !== owner.id));
+      setNotice(`${owner.pgName} was removed. Existing resident and payment records were preserved.`);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1027,7 +1086,10 @@ function App() {
                               </div>
                             </div>
                           </div>
-                          {status === "PENDING" && <button type="button" className="button button-primary" disabled={loading} onClick={() => approveOwner(owner.id)}>Approve owner</button>}
+                          <div className="admin-owner-actions">
+                            {status === "PENDING" && <button type="button" className="button button-primary" disabled={loading} onClick={() => approveOwner(owner.id)}>Approve owner</button>}
+                            <button type="button" className="button button-danger" disabled={loading} onClick={() => removeOwner(owner)}>Remove owner</button>
+                          </div>
                         </article>
                       ))}
                     </div>
@@ -1169,10 +1231,12 @@ function App() {
   const totalEmptyBeds = dashboardSummary?.availableBeds ?? 0;
   const firstPaymentPeriod = dashboardSummary?.firstPaymentPeriod || "";
   const pendingPayments = monthlyPaymentReport?.residents.filter((payment) => payment.remaining > 0) || [];
-  const currentPaymentPeriod = (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  })();
+  const monthlyMemberCount = monthlyPaymentReport?.residents.length || 0;
+  const monthlyEmptyBeds = dashboardSummary
+    ? Math.max(0, dashboardSummary.totalBeds - monthlyMemberCount)
+    : null;
+  const currentPaymentPeriod = getCurrentPaymentPeriod();
+  const ownerWorkspaceOpen = !monthlyPaymentsOpen && !emptyBedsOpen;
 
   return (
     <main className="dashboard">
@@ -1193,7 +1257,7 @@ function App() {
       </header>
 
       <div className="page-content">
-        <section className="page-heading">
+        {ownerWorkspaceOpen && <section className="page-heading">
           <div>
             <p className="eyebrow">YOUR PROPERTY</p>
             <h1>Resident overview</h1>
@@ -1211,19 +1275,15 @@ function App() {
               {emptyBedsOpen ? "Hide rooms/beds" : "Manage rooms/beds"}
             </button>
           </div>
-        </section>
+        </section>}
 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
 
-        {dashboardLoading && !dashboardSummary && (
+        {ownerWorkspaceOpen && dashboardLoading && !dashboardSummary && (
           <div className="dashboard-loading-note" role="status">Loading your latest dashboard totals…</div>
         )}
-        {dashboardSummary && <section className="stats-grid" aria-label="Property overview">
-          <article className="stat-card stat-card-static">
-            <span className="stat-icon icon-total">⌂</span>
-            <div><p className="stat-label">Total residents</p><strong>{dashboardSummary.totalResidents}</strong></div>
-          </article>
+        {ownerWorkspaceOpen && dashboardSummary && <section className="stats-grid" aria-label="Property overview">
           <button className={`stat-card stat-card-button${selectedStatus === "ACTIVE" ? " stat-card-selected" : ""}`} type="button" aria-pressed={selectedStatus === "ACTIVE"} onClick={() => showResidentsByStatus("ACTIVE")} disabled={loading}>
             <span className="stat-icon icon-active">✓</span>
             <div><p className="stat-label">Active residents</p><strong>{dashboardSummary.activeResidents}</strong></div>
@@ -1250,11 +1310,11 @@ function App() {
           </article>
           <article className="stat-card stat-card-static">
             <span className="stat-icon icon-pending">₹</span>
-            <div><p className="stat-label">Pending rent for selected month</p><strong>{formatCurrency(dashboardSummary.pendingRentAmount)}</strong></div>
+            <div><p className="stat-label">Pending rent for {currentMonthName}</p><strong>{formatCurrency(dashboardSummary.pendingRentAmount)}</strong></div>
           </article>
           <article className="stat-card stat-card-static">
             <span className="stat-icon icon-active">₹</span>
-            <div><p className="stat-label">Collection for selected month</p><strong>{formatCurrency(dashboardSummary.monthlyRentCollection)}</strong></div>
+            <div><p className="stat-label">Collection for {currentMonthName}</p><strong>{formatCurrency(dashboardSummary.monthlyRentCollection)}</strong></div>
           </article>
         </section>}
 
@@ -1361,10 +1421,23 @@ function App() {
             )}
             {monthlyPaymentReport && <>
               <div className="monthly-payment-totals" aria-label="Monthly rent totals">
+                <article className="monthly-total-residents">
+                  <span>Members in selected month</span>
+                  <strong>{monthlyMemberCount}</strong>
+                </article>
+                <article className="monthly-total-filled-beds">
+                  <span>Filled beds</span>
+                  <strong>{monthlyMemberCount}</strong>
+                </article>
+                <article className="monthly-total-empty-beds">
+                  <span>Empty beds</span>
+                  <strong>{monthlyEmptyBeds ?? "—"}</strong>
+                </article>
                 <article><span>Total rent</span><strong>{formatCurrency(monthlyPaymentReport.totalRent)}</strong></article>
                 <article><span>Rent collected</span><strong>{formatCurrency(monthlyPaymentReport.totalCollected)}</strong></article>
                 <article><span>Remaining to collect</span><strong>{formatCurrency(monthlyPaymentReport.totalRemaining)}</strong></article>
               </div>
+              <p className="monthly-bed-note">Bed occupancy uses the selected month’s members and your configured room capacity.</p>
               <div className="payment-list-heading">
                 <div>
                   <p className="eyebrow">FOLLOW-UP</p>
@@ -1503,10 +1576,10 @@ function App() {
                                   : <span className="missing-document">No proof</span>}
                               </div>
                               <div className="row-actions">
-                                <button className="text-action" onClick={() => openRentPayments(resident)}>Rent history</button>
-                                <button className="text-action" onClick={() => startEdit(resident)}>Edit</button>
-                                {resident.status === "ACTIVE" && <button className="text-action text-danger" onClick={() => markVacated(resident)}>Vacate</button>}
-                                <button className="text-action text-danger" onClick={() => permanentlyDeleteResident(resident)} disabled={loading}>Delete permanently</button>
+                                <button type="button" className="resident-action-button action-history" onClick={() => openRentPayments(resident)}>Rent history</button>
+                                <button type="button" className="resident-action-button action-edit" onClick={() => startEdit(resident)}>Edit</button>
+                                {resident.status === "ACTIVE" && <button type="button" className="resident-action-button action-vacate" onClick={() => markVacated(resident)}>Vacate</button>}
+                                <button type="button" className="resident-action-button action-delete" onClick={() => permanentlyDeleteResident(resident)} disabled={loading} title="Permanently delete resident">Delete</button>
                               </div>
                             </div>
                           </details>
@@ -1533,10 +1606,10 @@ function App() {
                         </td>
                         <td data-label="Actions">
                           <div className="row-actions">
-                            <button className="text-action" onClick={() => openRentPayments(resident)}>Rent history</button>
-                            <button className="text-action" onClick={() => startEdit(resident)}>Edit</button>
-                            {resident.status === "ACTIVE" && <button className="text-action text-danger" onClick={() => markVacated(resident)}>Vacate</button>}
-                            <button className="text-action text-danger" onClick={() => permanentlyDeleteResident(resident)} disabled={loading}>Delete permanently</button>
+                            <button type="button" className="resident-action-button action-history" onClick={() => openRentPayments(resident)}>Rent history</button>
+                            <button type="button" className="resident-action-button action-edit" onClick={() => startEdit(resident)}>Edit</button>
+                            {resident.status === "ACTIVE" && <button type="button" className="resident-action-button action-vacate" onClick={() => markVacated(resident)}>Vacate</button>}
+                            <button type="button" className="resident-action-button action-delete" onClick={() => permanentlyDeleteResident(resident)} disabled={loading} title="Permanently delete resident">Delete</button>
                           </div>
                         </td>
                       </tr>

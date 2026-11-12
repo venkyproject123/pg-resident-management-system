@@ -36,7 +36,7 @@ public final class OwnerPrincipal implements UserDetails {
 
 	@Override
 	public boolean isEnabled() {
-		return owner.isApproved();
+		return owner.isApproved() && !owner.isRemoved();
 	}
 
 	@Override

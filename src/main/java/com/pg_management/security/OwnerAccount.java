@@ -37,6 +37,9 @@ public class OwnerAccount {
 	@Column(nullable = false, columnDefinition = "boolean not null default true")
 	private boolean approved = true;
 
+	@Column(nullable = false, columnDefinition = "boolean not null default false")
+	private boolean removed;
+
 	@Column(name = "rent_due_day", nullable = false, columnDefinition = "int not null default 5")
 	private int legacyRentDueDay = 5;
 
@@ -94,8 +97,17 @@ public class OwnerAccount {
 		return approved;
 	}
 
+	public boolean isRemoved() {
+		return removed;
+	}
+
 	public void approve() {
 		this.approved = true;
+	}
+
+	public void remove() {
+		this.approved = false;
+		this.removed = true;
 	}
 
 	public void updatePgName(String pgName) {

@@ -1,6 +1,7 @@
 package com.pg_management.security;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.verify;
@@ -58,6 +59,14 @@ class AdminControllerTests {
 				.andExpect(status().isNoContent());
 
 		verify(ownerAuthService).approveOwner(7L);
+	}
+
+	@Test
+	void adminCanRemoveOwner() throws Exception {
+		mockMvc.perform(delete("/api/admin/owners/7").header("Authorization", AUTHORIZATION))
+				.andExpect(status().isNoContent());
+
+		verify(ownerAuthService).removeOwner(7L);
 	}
 
 	@Test

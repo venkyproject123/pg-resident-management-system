@@ -36,6 +36,20 @@ class OwnerUserDetailsServiceTests {
 	}
 
 	@Test
+	void removedOwnerCannotAuthenticate() {
+		OwnerAccount removed = new OwnerAccount("removed-owner", "encoded-password", "Sample PG",
+				"+919876543210", true);
+		removed.remove();
+		when(ownerAccountRepository.findByUsername("removed-owner")).thenReturn(Optional.of(removed));
+		OwnerUserDetailsService service = new OwnerUserDetailsService(
+				ownerAccountRepository, new BCryptPasswordEncoder(4), "admin", "admin-password");
+
+		UserDetails owner = service.loadUserByUsername("removed-owner");
+
+		assertFalse(owner.isEnabled());
+	}
+
+	@Test
 	void environmentAdminHasOnlyAdminRole() {
 		OwnerUserDetailsService service = new OwnerUserDetailsService(
 				ownerAccountRepository, new BCryptPasswordEncoder(4), "admin", "admin-password");

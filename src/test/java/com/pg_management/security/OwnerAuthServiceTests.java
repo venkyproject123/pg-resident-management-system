@@ -77,7 +77,7 @@ class OwnerAuthServiceTests {
 	void firstApprovedOwnerClaimsExistingUnassignedResidents() {
 		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210", false);
 		when(ownerAccountRepository.findById(7L)).thenReturn(Optional.of(owner));
-		when(ownerAccountRepository.countByApprovedTrue()).thenReturn(0L);
+		when(ownerAccountRepository.countByApprovedTrueAndRemovedFalse()).thenReturn(0L);
 
 		ownerAuthService.approveOwner(7L);
 
@@ -89,7 +89,7 @@ class OwnerAuthServiceTests {
 	void approvedOwnerListIncludesApprovedAccounts() {
 		OwnerAccount owner = new OwnerAccount(
 				"owner", "hash", "Sample PG", "Madhapur, Hyderabad", "+919876543210", true);
-		when(ownerAccountRepository.findAllByApprovedTrueOrderByIdAsc()).thenReturn(java.util.List.of(owner));
+		when(ownerAccountRepository.findAllByApprovedTrueAndRemovedFalseOrderByIdAsc()).thenReturn(java.util.List.of(owner));
 
 		var approvedOwners = ownerAuthService.findApprovedOwners();
 
@@ -104,7 +104,7 @@ class OwnerAuthServiceTests {
 	void pendingOwnerListIncludesLocation() {
 		OwnerAccount owner = new OwnerAccount(
 				"owner", "hash", "Sample PG", "Madhapur, Hyderabad", "+919876543210", false);
-		when(ownerAccountRepository.findAllByApprovedFalseOrderByIdAsc()).thenReturn(java.util.List.of(owner));
+		when(ownerAccountRepository.findAllByApprovedFalseAndRemovedFalseOrderByIdAsc()).thenReturn(java.util.List.of(owner));
 
 		var pendingOwners = ownerAuthService.findPendingOwners();
 
@@ -143,6 +143,19 @@ class OwnerAuthServiceTests {
 				() -> ownerAuthService.updateProfile("owner", request));
 
 		assertTrue(exception.getReason().contains("reserved"));
+	}
+
+	@Test
+	void removingOwnerDisablesLoginAndPreservesAccountRecord() {
+		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210", true);
+		when(ownerAccountRepository.findById(7L)).thenReturn(Optional.of(owner));
+
+		ownerAuthService.removeOwner(7L);
+
+		assertTrue(owner.isRemoved());
+		assertFalse(owner.isApproved());
+		assertFalse(new OwnerPrincipal(owner).isEnabled());
+		verify(ownerAccountRepository).save(owner);
 	}
 
 }

@@ -15,9 +15,9 @@ public interface OwnerAccountRepository extends JpaRepository<OwnerAccount, Long
 
 	boolean existsByMobileNumber(String mobileNumber);
 
-	List<OwnerAccount> findAllByApprovedFalseOrderByIdAsc();
+	List<OwnerAccount> findAllByApprovedFalseAndRemovedFalseOrderByIdAsc();
 
-	List<OwnerAccount> findAllByApprovedTrueOrderByIdAsc();
+	List<OwnerAccount> findAllByApprovedTrueAndRemovedFalseOrderByIdAsc();
 
-	long countByApprovedTrue();
+	long countByApprovedTrueAndRemovedFalse();
 }

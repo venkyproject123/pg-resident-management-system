@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,6 +38,12 @@ public class AdminController {
 	@PutMapping("/{ownerId}/approve")
 	public ResponseEntity<Void> approveOwner(@PathVariable Long ownerId) {
 		ownerAuthService.approveOwner(ownerId);
+		return ResponseEntity.noContent().build();
+	}
+
+	@DeleteMapping("/{ownerId}")
+	public ResponseEntity<Void> removeOwner(@PathVariable Long ownerId) {
+		ownerAuthService.removeOwner(ownerId);
 		return ResponseEntity.noContent().build();
 	}
 }

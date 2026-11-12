@@ -83,7 +83,7 @@ public class OwnerAuthService {
 
 	@Transactional(readOnly = true)
 	public List<OwnerSummary> findPendingOwners() {
-		return ownerAccountRepository.findAllByApprovedFalseOrderByIdAsc().stream()
+		return ownerAccountRepository.findAllByApprovedFalseAndRemovedFalseOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
 						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getMobileNumber(),
 						owner.getLocation()))
@@ -92,7 +92,7 @@ public class OwnerAuthService {
 
 	@Transactional(readOnly = true)
 	public List<OwnerSummary> findApprovedOwners() {
-		return ownerAccountRepository.findAllByApprovedTrueOrderByIdAsc().stream()
+		return ownerAccountRepository.findAllByApprovedTrueAndRemovedFalseOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
 						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getMobileNumber(),
 						owner.getLocation()))
@@ -107,15 +107,28 @@ public class OwnerAuthService {
 	public void approveOwner(Long ownerId) {
 		OwnerAccount owner = ownerAccountRepository.findById(ownerId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registration not found"));
+		if (owner.isRemoved()) {
+			throw new ResponseStatusException(HttpStatus.GONE, "This owner registration has been removed");
+		}
 		if (owner.isApproved()) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "This owner is already approved");
 		}
-		boolean firstApprovedOwner = ownerAccountRepository.countByApprovedTrue() == 0;
+		boolean firstApprovedOwner = ownerAccountRepository.countByApprovedTrueAndRemovedFalse() == 0;
 		owner.approve();
 		ownerAccountRepository.save(owner);
 		if (firstApprovedOwner) {
 			jdbcTemplate.update("UPDATE residents SET owner_id = ? WHERE owner_id IS NULL", owner.getId());
 		}
+	}
+
+	public void removeOwner(Long ownerId) {
+		OwnerAccount owner = ownerAccountRepository.findById(ownerId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found"));
+		if (owner.isRemoved()) {
+			throw new ResponseStatusException(HttpStatus.GONE, "This owner has already been removed");
+		}
+		owner.remove();
+		ownerAccountRepository.save(owner);
 	}
 
 	@Transactional(readOnly = true)
