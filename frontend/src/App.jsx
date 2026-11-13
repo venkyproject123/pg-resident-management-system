@@ -1240,22 +1240,9 @@ function App() {
   const currentPaymentPeriod = getCurrentPaymentPeriod();
   const ownerWorkspaceOpen = !monthlyPaymentsOpen && !emptyBedsOpen;
   const homePageActive = ownerWorkspaceOpen && !profileOpen;
-  const activePage = profileOpen
-    ? "settings"
-    : monthlyPaymentsOpen
-      ? "payments"
-      : emptyBedsOpen
-        ? "rooms"
-        : "home";
-  const activePageLabel = {
-    home: "Home",
-    payments: "Manage payments",
-    rooms: "Manage rooms/beds",
-    settings: "PG settings"
-  }[activePage];
 
   return (
-    <main className={`dashboard dashboard-view-${activePage}`}>
+    <main className="dashboard">
       <header className="topbar">
         <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
           event.preventDefault();
@@ -1266,7 +1253,6 @@ function App() {
         </a>
         <div className="topbar-right">
           <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
-          <span className={`active-page-indicator active-page-${activePage}`} aria-current="page">{activePageLabel}</span>
           <button
             className="button button-primary"
             type="button"
