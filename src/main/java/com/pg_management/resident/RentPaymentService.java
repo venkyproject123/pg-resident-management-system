@@ -52,6 +52,7 @@ public class RentPaymentService {
 					BigDecimal rent = resident.rent();
 					BigDecimal collected = data.collectedByResident()
 							.getOrDefault(resident.residentId(), BigDecimal.ZERO);
+					collected = collected.min(rent);
 					BigDecimal remaining = rent.subtract(collected).max(BigDecimal.ZERO);
 					return new MonthlyRentPaymentResponse.ResidentPayment(
 							resident.residentId(),
@@ -83,6 +84,7 @@ public class RentPaymentService {
 			BigDecimal rent = resident.rent();
 			BigDecimal collected = data.collectedByResident()
 					.getOrDefault(resident.residentId(), BigDecimal.ZERO);
+			collected = collected.min(resident.rent());
 			totalCollected = totalCollected.add(collected);
 			totalRemaining = totalRemaining.add(rent.subtract(collected).max(BigDecimal.ZERO));
 		}
@@ -99,10 +101,8 @@ public class RentPaymentService {
 		Map<Long, BigDecimal> collectedByResident = new HashMap<>();
 		for (MonthlyRentPaymentAmount payment : rentPaymentRepository.findAmountsByOwnerAndPeriod(
 				owner.getId(), selectedMonth.getYear(), selectedMonth.getMonthValue())) {
-			if (payment.paid()) {
-				collectedByResident.put(payment.residentId(),
-						payment.amount() == null ? BigDecimal.ZERO : payment.amount());
-			}
+			collectedByResident.put(payment.residentId(),
+					payment.amount() == null ? BigDecimal.ZERO : payment.amount());
 		}
 		return new MonthlyRentData(residents, collectedByResident);
 	}
@@ -120,8 +120,15 @@ public class RentPaymentService {
 		}
 		RentPayment payment = rentPaymentRepository.findByResidentAndPeriodYearAndPeriodMonth(resident, year, month)
 				.orElseGet(() -> new RentPayment(resident, year, month));
+		if (payment.isPaid()) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "This month's rent is already fully paid");
+		}
 		boolean wasAlreadyPaid = payment.isPaid();
-		payment.markPaid(request.amount(), request.paidDate(), request.method());
+		try {
+			payment.recordPayment(request.amount(), resident.getRent(), request.paidDate(), request.method());
+		} catch (IllegalArgumentException exception) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage());
+		}
 		rentPaymentRepository.saveAndFlush(payment);
 
 		return RentPaymentResponse.from(payment, wasAlreadyPaid);

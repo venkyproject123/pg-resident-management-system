@@ -94,9 +94,14 @@ public class RentPayment {
 		return reminderSentAt;
 	}
 
-	public void markPaid(BigDecimal amount, LocalDate paidDate, RentPaymentMethod paymentMethod) {
-		this.paid = true;
-		this.amount = amount;
+	public void recordPayment(BigDecimal amount, BigDecimal monthlyRent, LocalDate paidDate, RentPaymentMethod paymentMethod) {
+		BigDecimal received = this.amount == null ? BigDecimal.ZERO : this.amount;
+		BigDecimal updatedAmount = received.add(amount);
+		if (updatedAmount.compareTo(monthlyRent) > 0) {
+			throw new IllegalArgumentException("Payment cannot exceed the remaining rent for this month");
+		}
+		this.paid = updatedAmount.compareTo(monthlyRent) >= 0;
+		this.amount = updatedAmount;
 		this.paidDate = paidDate;
 		this.paymentMethod = paymentMethod;
 	}

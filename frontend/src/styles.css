@@ -705,3 +705,95 @@ td { font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   .resident-drawer-backdrop, .resident-drawer { animation: none; }
 }
+
+/* Shared product system: consistent surfaces, spacing and interaction states. */
+:root {
+  color-scheme: light;
+  --green: #176b4b;
+  --green-dark: #10563b;
+  --muted: #66766d;
+  --line: #e1e8e3;
+  --surface: #fff;
+  --canvas: #f5f7f5;
+  --text: #1f3027;
+  --shadow-sm: 0 2px 8px #173b2810;
+  --shadow-md: 0 12px 32px #173b2812;
+}
+body { min-width: 320px; background: var(--canvas); color: var(--text); }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid #80b89a; outline-offset: 2px; }
+.topbar, .admin-topbar { height: 68px; border-color: var(--line); box-shadow: 0 1px 3px #173b2808; }
+.page-content, .admin-page-content { width: min(1360px, calc(100% - 48px)); padding-top: 32px; }
+.page-heading { align-items: center; gap: 24px; margin-bottom: 24px; }
+.page-heading h1, .admin-page-heading h1 { color: var(--text); letter-spacing: -.7px; }
+.page-heading-actions { align-items: center; gap: 9px; }
+.button { min-height: 40px; border-radius: 8px; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.button:hover:not(:disabled) { transform: translateY(-1px); }
+.button-primary { box-shadow: none; }
+.button-light { border: 1px solid var(--line); background: #fff; }
+.button-light:hover:not(:disabled) { border-color: #c5d4ca; background: #f8faf8; }
+.stats-grid { align-items: stretch; gap: 14px; margin-bottom: 22px; }
+.stat-card { min-height: 112px; height: 100%; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 11px; background: #fff; box-shadow: var(--shadow-sm); }
+.stat-card:hover { box-shadow: var(--shadow-md); }
+.stat-card-button { width: 100%; text-align: left; }
+.stat-card-selected { border-color: #6ea98a; box-shadow: inset 0 0 0 1px #6ea98a, var(--shadow-sm); }
+.stat-icon { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 10px; }
+.stat-card strong { font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
+.panel, .admin-owner-column, .admin-total-card { border-color: var(--line); border-radius: 11px; box-shadow: var(--shadow-sm); }
+.panel-heading { align-items: flex-start; gap: 18px; padding-bottom: 17px; border-bottom-color: var(--line); }
+.panel-heading h2 { color: var(--text); letter-spacing: -.25px; }
+.workspace { gap: 18px; }
+.resident-panel { overflow: hidden; }
+.resident-directory-table th { background: #f7f9f7; color: #617168; font-size: 10px; letter-spacing: .6px; }
+.resident-directory-table td { height: 64px; border-bottom-color: #edf1ee; }
+.resident-directory-table tbody tr:hover { background: #fafcfb; }
+.avatar { object-fit: cover; overflow: hidden; border: 1px solid #dce8df; border-radius: 50%; background: #edf5ef; color: var(--green); }
+.resident-drawer-avatar { flex-shrink: 0; }
+.resident-drawer, .resident-dialog { border-color: var(--line); border-radius: 13px; box-shadow: 0 24px 80px #12271d30; }
+.rent-month-grid, .room-availability-grid { align-items: stretch; }
+.rent-month-card, .room-availability-card { min-height: 142px; height: 100%; border-color: var(--line); border-radius: 10px; box-shadow: var(--shadow-sm); }
+.rent-month-card { display: flex; flex-direction: column; }
+.rent-month-card > .text-action { margin-top: auto; align-self: flex-start; }
+.rent-payment-status.is-partial { background: #fff4e2; color: #99630d; }
+.room-availability-card { display: flex; flex-direction: column; justify-content: space-between; }
+.room-availability-card p { margin-top: 15px; }
+.room-has-vacancy { border-color: #cfe3d5; }
+.monthly-payments-panel, .room-availability { margin-bottom: 20px; }
+.table-wrap { border: 1px solid var(--line); border-radius: 9px; }
+.resident-drawer-backdrop, .dialog-backdrop { padding: 16px; backdrop-filter: blur(3px); }
+.admin-owner-card { min-height: 176px; justify-content: space-between; border-color: var(--line); border-radius: 10px; box-shadow: var(--shadow-sm); }
+.admin-owner-columns { align-items: stretch; }
+.admin-owner-column { display: flex; flex-direction: column; }
+.admin-owner-list { align-content: start; grid-auto-rows: minmax(176px, auto); }
+.admin-empty-state { min-height: 140px; align-content: center; }
+.landing-preview { transform: none; border-radius: 14px; box-shadow: var(--shadow-md); }
+.landing-feature-grid article { min-height: 182px; border-radius: 11px; }
+.login-card { border-radius: 14px; box-shadow: var(--shadow-md); }
+input, textarea, select { border-color: #d8e1db; border-radius: 8px; }
+input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0 0 0 3px #e4f1e8; }
+.alert { border-radius: 8px; }
+@media (max-width: 900px) {
+  .page-content, .admin-page-content { width: min(100% - 32px, 720px); padding-top: 24px; }
+  .page-heading { align-items: flex-start; flex-direction: column; }
+  .page-heading-actions { width: 100%; flex-wrap: wrap; }
+  .page-heading-actions .button { flex: 1 1 160px; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-owner-columns { align-items: stretch; }
+}
+@media (max-width: 540px) {
+  .page-content, .admin-page-content { width: calc(100% - 24px); padding-top: 18px; }
+  .topbar, .admin-topbar { height: auto; min-height: 60px; padding: 10px 12px; }
+  .topbar-right { gap: 6px; }
+  .topbar-right .button { min-height: 34px; padding: 0 9px; font-size: 11px; }
+  .owner-label { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-grid { gap: 9px; }
+  .stat-card { min-height: 94px; gap: 9px; padding: 12px; }
+  .stat-icon { flex-basis: 30px; width: 30px; height: 30px; }
+  .stat-card strong { font-size: clamp(15px, 5vw, 21px); }
+  .admin-owner-columns, .landing-feature-grid { grid-template-columns: 1fr; }
+  .admin-owner-list { grid-auto-rows: minmax(150px, auto); }
+  .admin-owner-card { min-height: 150px; }
+  .landing-hero { gap: 30px; padding-top: 48px; }
+  .login-card { padding: 26px 21px; }
+  .resident-drawer { width: 100%; }
+}

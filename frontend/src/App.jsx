@@ -50,6 +50,36 @@ function SecretInput(props) {
   );
 }
 
+function ResidentAvatar({ resident, credentials, className = "avatar" }) {
+  const [photoUrl, setPhotoUrl] = useState("");
+  useEffect(() => {
+    if (!resident?.photoAvailable || !credentials) {
+      setPhotoUrl("");
+      return undefined;
+    }
+    let active = true;
+    let objectUrl = "";
+    fetch(apiUrl(`${RESIDENTS_API}/${resident.id}/photo`), {
+      headers: { Authorization: `Basic ${encodeBasicCredentials(credentials)}` },
+      cache: "no-store"
+    }).then((response) => {
+      if (!response.ok) throw new Error("Photo unavailable");
+      return response.blob();
+    }).then((blob) => {
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob);
+      setPhotoUrl(objectUrl);
+    }).catch(() => { if (active) setPhotoUrl(""); });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [resident?.id, resident?.photoAvailable, credentials]);
+  return photoUrl
+    ? <img className={className} src={photoUrl} alt={`${resident.name} profile`} />
+    : <span className={className} aria-label={`${resident.name} profile`}>{resident.name.trim().charAt(0).toUpperCase()}</span>;
+}
+
 async function request(
   path,
   credentials,
@@ -139,16 +169,9 @@ function getCurrentPaymentPeriod() {
 
 function readSavedSession() {
   try {
-    const value = sessionStorage.getItem("haven-auth-session");
-    if (!value) return null;
-    const session = JSON.parse(value);
-    if ((session.type === "owner" || session.type === "admin")
-      && typeof session.credentials?.username === "string"
-      && typeof session.credentials?.password === "string") {
-      return session;
-    }
+    sessionStorage.removeItem("haven-auth-session");
   } catch {
-    return null;
+    // Continue without restoring credentials when browser storage is unavailable.
   }
   return null;
 }
@@ -519,7 +542,6 @@ function App() {
     setError("");
     try {
       const profile = await request("/api/owner/profile", loginForm);
-      sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "owner", credentials: loginForm }));
       setProfileForm({
         username: profile.username,
         pgName: profile.pgName,
@@ -570,7 +592,6 @@ function App() {
       );
       setPendingOwners(overview.pending);
       setApprovedOwners(overview.approved);
-      sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "admin", credentials: adminLoginForm }));
       setAdminCredentials(adminLoginForm);
     } catch (requestError) {
       setError(requestError.message);
@@ -678,7 +699,6 @@ function App() {
         body: JSON.stringify(profileForm)
       });
       const updatedCredentials = { ...credentials, username: profileForm.username.trim() };
-      sessionStorage.setItem("haven-auth-session", JSON.stringify({ type: "owner", credentials: updatedCredentials }));
       setCredentials(updatedCredentials);
       setLoginForm(updatedCredentials);
       setProfileOpen(false);
@@ -1635,7 +1655,7 @@ function App() {
                       <tr key={resident.id}>
                         <td data-label="Resident">
                           <button type="button" className="resident-list-item" onClick={() => openResidentDetails(resident)}>
-                            <span className="avatar">{resident.name.trim().charAt(0).toUpperCase()}</span>
+                            <ResidentAvatar resident={resident} credentials={credentials} className="avatar" />
                             <span className="resident-list-identity">
                               <strong>{resident.name}</strong>
                               <small>{resident.mobileNumber || "Mobile not added"}</small>
@@ -1686,7 +1706,7 @@ function App() {
             <aside className="resident-drawer" role="dialog" aria-modal="true" aria-labelledby="resident-drawer-title" onClick={(event) => event.stopPropagation()}>
               <header className="resident-drawer-header">
                 <div className="resident-drawer-title">
-                  <span className="avatar resident-drawer-avatar">{residentDetails.name.trim().charAt(0).toUpperCase()}</span>
+                  <ResidentAvatar resident={residentDetails} credentials={credentials} className="avatar resident-drawer-avatar" />
                   <div>
                     <p className="eyebrow">RESIDENT PROFILE</p>
                     <h2 id="resident-drawer-title">{residentDetails.name}</h2>
@@ -1802,14 +1822,14 @@ function App() {
                     <article className={`rent-month-card${payment?.paid ? " rent-month-paid" : ""}`} key={month}>
                       <div className="rent-month-heading">
                         <strong>{new Date(rentPaymentYear, index, 1).toLocaleString("en", { month: "long" })}</strong>
-                        <span className={`rent-payment-status${payment?.paid ? " is-paid" : ""}`}>{payment?.paid ? "Paid" : "Unpaid"}</span>
+                        <span className={`rent-payment-status${payment?.paid ? " is-paid" : payment?.amount ? " is-partial" : ""}`}>{payment?.paid ? "Paid" : payment?.amount ? "Partially paid" : "Unpaid"}</span>
                       </div>
                       {payment?.paid ? (
                         <div className="rent-payment-detail">
                           <span>₹{Number(payment.amount).toLocaleString("en-IN")} · {payment.method?.replace("_", " ")}</span>
                           <small>Paid {payment.paidDate}</small>
                         </div>
-                      ) : <p className="rent-payment-detail">Monthly rent: ₹{Number(rentPaymentResident.rent).toLocaleString("en-IN")}</p>}
+                      ) : <p className="rent-payment-detail">{payment?.amount ? `Collected ${formatCurrency(payment.amount)} · ` : "Monthly rent: "}{formatCurrency(rentPaymentResident.rent)}{payment?.amount ? ` remaining ${formatCurrency(Math.max(0, Number(rentPaymentResident.rent) - Number(payment.amount)))}` : ""}</p>}
                       {draftOpen ? (
                         <form className="rent-payment-form" onSubmit={saveRentPayment}>
                           <label>Amount (₹)<input type="number" min="0.01" step="0.01" required value={paymentDraft.amount} onChange={(event) => setPaymentDraft({ ...paymentDraft, amount: event.target.value })} /></label>
@@ -1820,12 +1840,12 @@ function App() {
                             <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving…" : "Save payment"}</button>
                           </div>
                         </form>
-                      ) : <button type="button" className="text-action" disabled={loading} onClick={() => setPaymentDraft({
+                      ) : !payment?.paid && <button type="button" className="text-action" disabled={loading} onClick={() => setPaymentDraft({
                         month,
-                        amount: payment?.amount ? String(payment.amount) : String(rentPaymentResident.rent),
+                        amount: payment?.amount ? String(Math.max(0, Number(rentPaymentResident.rent) - Number(payment.amount))) : String(rentPaymentResident.rent),
                         paidDate: payment?.paidDate || new Date().toISOString().slice(0, 10),
                         method: payment?.method || "CASH"
-                      })}>{payment?.paid ? "Edit payment" : "Mark rent paid"}</button>}
+                      })}>{payment?.paid ? "Paid in full" : payment?.amount ? "Record another payment" : "Record payment"}</button>}
                     </article>
                   );
                 })}
