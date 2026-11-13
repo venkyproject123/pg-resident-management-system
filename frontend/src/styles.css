@@ -587,3 +587,121 @@ td { font-size: 13px; }
   .table-pagination > div { justify-content: space-between; gap: 6px; }
   .table-pagination .button { min-height: 40px; padding: 0 11px; font-size: 12px; }
 }
+
+.resident-directory-table { min-width: 920px; }
+.resident-list-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.resident-list-item:hover .resident-list-identity strong,
+.resident-list-item:focus-visible .resident-list-identity strong { color: var(--green); }
+.resident-list-item:focus-visible, .pending-resident-link:focus-visible {
+  outline: 2px solid #78a98a;
+  outline-offset: 3px;
+}
+.resident-list-identity { display: grid; min-width: 0; gap: 3px; }
+.resident-list-identity strong { overflow: hidden; color: #354239; font-size: 12px; text-overflow: ellipsis; }
+.resident-list-identity small { color: #89958c; font-size: 10px; }
+.resident-list-open { margin-left: auto; color: var(--green); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.pending-resident-link {
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #354239;
+  font-weight: 700;
+  text-align: left;
+}
+.pending-resident-link:hover { color: var(--green); text-decoration: underline; }
+
+.resident-drawer-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: #17241dcc;
+  animation: resident-drawer-fade-in .18s ease-out;
+}
+.resident-drawer {
+  display: grid;
+  width: min(520px, 100%);
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: -16px 0 48px #10231d30;
+  animation: resident-drawer-slide-in .22s ease-out;
+}
+.resident-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 22px 24px;
+  border-bottom: 1px solid #e8eee8;
+  background: linear-gradient(115deg, #f3f8f3, #fff 75%);
+}
+.resident-drawer-title { display: flex; min-width: 0; align-items: center; gap: 13px; }
+.resident-drawer-title > div { min-width: 0; }
+.resident-drawer-title .eyebrow { margin-bottom: 4px; color: var(--green); }
+.resident-drawer-title h2 { overflow: hidden; margin: 0 0 7px; color: #293a2f; font-size: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.resident-drawer-avatar { flex-basis: 48px; width: 48px; height: 48px; border-radius: 14px; font-size: 18px; }
+.resident-drawer-scroll { overflow-y: auto; padding: 6px 24px 24px; overscroll-behavior: contain; }
+.resident-drawer-scroll > .alert { margin-top: 16px; }
+.resident-drawer-section { padding: 18px 0; border-bottom: 1px solid #edf0ed; }
+.resident-drawer-section:last-child { border-bottom: 0; }
+.resident-drawer-section h3 { margin: 0 0 13px; color: #35463a; font-size: 14px; }
+.resident-drawer-details { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 20px; margin: 0; }
+.resident-drawer-details > div { min-width: 0; }
+.resident-drawer-details dt { margin-bottom: 5px; color: #849087; font-size: 10px; font-weight: 600; }
+.resident-drawer-details dd { overflow-wrap: anywhere; margin: 0; color: #354239; font-size: 12px; line-height: 1.5; }
+.resident-address-details { grid-template-columns: 1fr; gap: 14px; }
+.resident-trend-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.resident-trend-heading h3 { margin: 0 0 4px; }
+.resident-trend-heading p { margin: 0; color: #849087; font-size: 10px; }
+.resident-trend-years { display: flex; align-items: center; gap: 8px; color: #425348; font-size: 12px; }
+.resident-trend-years .button { min-width: 36px; min-height: 36px; padding: 0; font-size: 19px; }
+.resident-trend-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.resident-trend-month { display: grid; min-width: 0; gap: 4px; padding: 9px 7px; border: 1px solid #f0dfc4; border-radius: 9px; background: #fffaf1; text-align: center; }
+.resident-trend-month > span { color: #777f78; font-size: 10px; }
+.resident-trend-month > strong { color: #9b6d28; font-size: 10px; }
+.resident-trend-month > small { overflow: hidden; color: #8d795c; font-size: 9px; text-overflow: ellipsis; }
+.resident-trend-month.trend-paid { border-color: #d3e8d8; background: #f3faf5; }
+.resident-trend-month.trend-paid > strong { color: #27814d; }
+.resident-drawer-documents { display: flex; flex-wrap: wrap; gap: 9px; }
+.resident-drawer-documents .button { min-height: 38px; font-size: 11px; }
+.resident-drawer-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 14px 20px max(14px, env(safe-area-inset-bottom)); border-top: 1px solid #e8eee8; background: #fff; }
+.resident-drawer-actions .resident-action-button { min-width: 0; min-height: 40px; padding: 0 8px; font-size: 11px; }
+@keyframes resident-drawer-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes resident-drawer-slide-in { from { transform: translateX(24px); } to { transform: translateX(0); } }
+
+@media (max-width: 900px) {
+  .resident-drawer { width: min(500px, 100%); }
+}
+
+@media (max-width: 540px) {
+  .resident-directory-table { min-width: 0; }
+  .resident-list-item { gap: 11px; }
+  .resident-list-item .avatar { flex-basis: 42px; width: 42px; height: 42px; }
+  .resident-list-identity strong { font-size: 15px; }
+  .resident-list-identity small { font-size: 12px; }
+  .resident-list-open { font-size: 11px; }
+  .resident-drawer-header { padding: 17px 16px; }
+  .resident-drawer-scroll { padding: 4px 16px 18px; }
+  .resident-drawer-title h2 { font-size: 18px; }
+  .resident-drawer-details { gap: 13px 12px; }
+  .resident-trend-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .resident-drawer-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 11px 14px max(11px, env(safe-area-inset-bottom)); }
+  .resident-drawer-actions .resident-action-button { min-height: 44px; font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resident-drawer-backdrop, .resident-drawer { animation: none; }
+}

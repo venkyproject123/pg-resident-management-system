@@ -212,12 +212,56 @@ function App() {
   const [documentPreview, setDocumentPreview] = useState(null);
   const [documentError, setDocumentError] = useState("");
   const [viewerResident, setViewerResident] = useState(null);
+  const [residentDetails, setResidentDetails] = useState(null);
+  const [residentDetailsLoading, setResidentDetailsLoading] = useState(false);
+  const [residentTrendYear, setResidentTrendYear] = useState(new Date().getFullYear());
+  const [residentTrendPayments, setResidentTrendPayments] = useState([]);
   const [rentPaymentResident, setRentPaymentResident] = useState(null);
   const [rentPaymentYear, setRentPaymentYear] = useState(new Date().getFullYear());
   const [rentPayments, setRentPayments] = useState([]);
   const [paymentDraft, setPaymentDraft] = useState(null);
   const photoInput = useRef(null);
   const identityProofInput = useRef(null);
+
+  async function openResidentDetails(resident) {
+    setResidentDetails(resident);
+    setResidentDetailsLoading(true);
+    setResidentTrendPayments([]);
+    setError("");
+    const joiningYear = Number(resident.joiningDate?.slice(0, 4)) || new Date().getFullYear();
+    const year = Math.max(new Date().getFullYear(), joiningYear);
+    setResidentTrendYear(year);
+    try {
+      const [details, payments] = await Promise.all([
+        request(`${RESIDENTS_API}/${resident.id}`, credentials),
+        request(`${RESIDENTS_API}/${resident.id}/rent-payments?year=${year}`, credentials)
+      ]);
+      setResidentDetails(details);
+      setResidentTrendPayments(payments);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setResidentDetailsLoading(false);
+    }
+  }
+
+  async function changeResidentTrendYear(year) {
+    if (!residentDetails) return;
+    setResidentDetailsLoading(true);
+    setError("");
+    try {
+      const payments = await request(
+        `${RESIDENTS_API}/${residentDetails.id}/rent-payments?year=${year}`,
+        credentials
+      );
+      setResidentTrendYear(year);
+      setResidentTrendPayments(payments);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setResidentDetailsLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!credentials) return undefined;
@@ -232,6 +276,7 @@ function App() {
       setIdentityProofFile(null);
       setRentPaymentResident(null);
       setPaymentDraft(null);
+      setResidentDetails(null);
       setViewerResident(null);
       setDocumentPreview(null);
       setDocumentError("");
@@ -244,6 +289,20 @@ function App() {
     window.addEventListener("popstate", keepDashboardOpen);
     return () => window.removeEventListener("popstate", keepDashboardOpen);
   }, [credentials]);
+
+  useEffect(() => {
+    if (!residentDetails) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setResidentDetails(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [residentDetails]);
 
   useEffect(() => {
     return () => {
@@ -877,6 +936,7 @@ function App() {
     setNotice("");
     try {
       await request(`${RESIDENTS_API}/${resident.id}`, credentials, { method: "DELETE" });
+      setResidentDetails(null);
       setNotice("Resident marked as vacated successfully. Their history has been preserved.");
       await refreshOwnerData(credentials);
     } catch (requestError) {
@@ -895,6 +955,7 @@ function App() {
     setNotice("");
     try {
       await request(`${RESIDENTS_API}/${resident.id}/permanent`, credentials, { method: "DELETE" });
+      setResidentDetails(null);
       setNotice("Resident and their documents permanently deleted.");
       await refreshOwnerData(credentials);
     } catch (requestError) {
@@ -907,6 +968,7 @@ function App() {
   async function openRentPayments(resident, year = null, month = null) {
     const joiningYear = Number(resident.joiningDate.slice(0, 4));
     const requestedYear = year ?? Math.max(new Date().getFullYear(), joiningYear);
+    setResidentDetails(null);
     setLoading(true);
     setError("");
     setNotice("");
@@ -1470,7 +1532,17 @@ function App() {
                   <tbody>
                     {pendingPayments.map((payment) => (
                       <tr key={payment.residentId}>
-                        <td data-label="Resident">{payment.residentName}</td>
+                        <td data-label="Resident">
+                          <button type="button" className="pending-resident-link" onClick={() => openResidentDetails({
+                            id: payment.residentId,
+                            name: payment.residentName,
+                            roomNumber: payment.roomNumber,
+                            sharing: payment.sharing,
+                            rent: payment.rent,
+                            joiningDate: payment.joiningDate,
+                            mobileNumber: payment.mobileNumber
+                          })}>{payment.residentName}</button>
+                        </td>
                         <td data-label="Room / sharing"><span className="room-tag">Room {payment.roomNumber} · {payment.sharing ? sharingLabel(payment.sharing) : "sharing not set"}</span></td>
                         <td data-label="Mobile">{payment.mobileNumber || "—"}</td>
                         <td data-label="Rent date">{payment.joiningDate ? Number(payment.joiningDate.slice(-2)) : "—"}</td>
@@ -1554,73 +1626,28 @@ function App() {
               </div>
             ) : (
               <div className="table-wrap">
-                <table>
+                <table className="resident-directory-table">
                   <thead>
-                    <tr><th>RESIDENT</th><th>MOBILE</th><th>ROOM / SHARING</th><th>RENT / MONTH</th><th>JOINED</th><th>STATUS</th><th>VACATED DATE</th><th>RESIDENT DETAILS</th><th><span className="sr-only">Actions</span></th></tr>
+                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>RENT / MONTH</th><th>JOINED</th><th>STATUS</th><th>VACATED DATE</th></tr>
                   </thead>
                   <tbody>
                     {residents.map((resident) => (
                       <tr key={resident.id}>
                         <td data-label="Resident">
-                          <div className="resident-cell">
+                          <button type="button" className="resident-list-item" onClick={() => openResidentDetails(resident)}>
                             <span className="avatar">{resident.name.trim().charAt(0).toUpperCase()}</span>
-                            <span><strong>{resident.name}</strong><small>Father: {resident.fatherName}</small></span>
-                          </div>
-                          <div className="mobile-resident-summary">
-                            <span>Room {resident.roomNumber} · {resident.sharing ? sharingLabel(resident.sharing) : "sharing not set"}</span>
-                            <span>{resident.mobileNumber || "Mobile not added"}</span>
-                          </div>
-                          <details className="mobile-resident-details">
-                            <summary>All details</summary>
-                            <div className="mobile-resident-full-details">
-                              <div><span>Mobile</span><strong>{resident.mobileNumber || "—"}</strong></div>
-                              <div><span>Father</span><strong>{resident.fatherName}</strong></div>
-                              <div><span>Rent / month</span><strong>₹{Number(resident.rent).toLocaleString("en-IN")}</strong></div>
-                              <div><span>Advance</span><strong>₹{Number(resident.advanceAmount).toLocaleString("en-IN")}</strong></div>
-                              <div><span>Joined</span><strong>{resident.joiningDate}</strong></div>
-                              <div><span>Status</span><strong>{resident.status === "ACTIVE" ? "Active" : "Vacated"}</strong></div>
-                              <div><span>Vacated date</span><strong>{resident.vacatedDate || "—"}</strong></div>
-                              <div><span>Permanent address</span><strong>{resident.permanentAddress}</strong></div>
-                              <div><span>Company address</span><strong>{resident.companyAddress}</strong></div>
-                              <div className="details-documents">
-                                {resident.hasPhoto
-                                  ? <button className="text-action" onClick={() => viewDocument(resident, "photo")}>View photo</button>
-                                  : <span className="missing-document">No photo</span>}
-                                {resident.hasIdentityProof
-                                  ? <button className="text-action" onClick={() => viewDocument(resident, "identity-proof")}>View proof</button>
-                                  : <span className="missing-document">No proof</span>}
-                              </div>
-                            </div>
-                          </details>
+                            <span className="resident-list-identity">
+                              <strong>{resident.name}</strong>
+                              <small>{resident.mobileNumber || "Mobile not added"}</small>
+                            </span>
+                            <span className="resident-list-open">View details →</span>
+                          </button>
                         </td>
-                        <td data-label="Mobile">{resident.mobileNumber || "—"}</td>
                         <td data-label="Room / sharing"><span className="room-tag">{resident.roomNumber} · {resident.sharing ? sharingLabel(resident.sharing) : "sharing not set"}</span></td>
                         <td data-label="Rent / month" className="rent-cell">₹{Number(resident.rent).toLocaleString("en-IN")}</td>
                         <td data-label="Joined">{resident.joiningDate}</td>
                         <td data-label="Status"><span className={`status-badge ${resident.status === "ACTIVE" ? "status-active" : "status-vacated"}`}><span />{resident.status === "ACTIVE" ? "Active" : "Vacated"}</span></td>
                         <td data-label="Vacated date">{resident.vacatedDate || "—"}</td>
-                        <td data-label="Resident details" className="details-cell">
-                          <div><span>Father</span><strong>{resident.fatherName}</strong></div>
-                          <div><span>Advance</span><strong>₹{Number(resident.advanceAmount).toLocaleString("en-IN")}</strong></div>
-                          <div><span>Permanent</span><strong>{resident.permanentAddress}</strong></div>
-                          <div><span>Company</span><strong>{resident.companyAddress}</strong></div>
-                          <div className="details-documents">
-                            {resident.hasPhoto
-                              ? <button className="text-action" onClick={() => viewDocument(resident, "photo")}>View photo</button>
-                              : <span className="missing-document">No photo</span>}
-                            {resident.hasIdentityProof
-                              ? <button className="text-action" onClick={() => viewDocument(resident, "identity-proof")}>View proof</button>
-                              : <span className="missing-document">No proof</span>}
-                          </div>
-                        </td>
-                        <td data-label="Actions">
-                          <div className="row-actions">
-                            <button type="button" className="resident-action-button action-history" onClick={() => openRentPayments(resident)}>Rent history</button>
-                            <button type="button" className="resident-action-button action-edit" onClick={() => startEdit(resident)}>Edit</button>
-                            {resident.status === "ACTIVE" && <button type="button" className="resident-action-button action-vacate" onClick={() => markVacated(resident)}>Vacate</button>}
-                            <button type="button" className="resident-action-button action-delete" onClick={() => permanentlyDeleteResident(resident)} disabled={loading} title="Permanently delete resident">Delete</button>
-                          </div>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1653,6 +1680,94 @@ function App() {
         </section>
         )}
         </>}
+
+        {residentDetails && (
+          <div className="resident-drawer-backdrop" onClick={() => setResidentDetails(null)}>
+            <aside className="resident-drawer" role="dialog" aria-modal="true" aria-labelledby="resident-drawer-title" onClick={(event) => event.stopPropagation()}>
+              <header className="resident-drawer-header">
+                <div className="resident-drawer-title">
+                  <span className="avatar resident-drawer-avatar">{residentDetails.name.trim().charAt(0).toUpperCase()}</span>
+                  <div>
+                    <p className="eyebrow">RESIDENT PROFILE</p>
+                    <h2 id="resident-drawer-title">{residentDetails.name}</h2>
+                    <span className={`status-badge ${residentDetails.status === "ACTIVE" ? "status-active" : residentDetails.status === "VACATED" ? "status-vacated" : ""}`}>
+                      <span />{residentDetails.status === "ACTIVE" ? "Active" : residentDetails.status === "VACATED" ? "Vacated" : "Loading…"}
+                    </span>
+                  </div>
+                </div>
+                <button type="button" className="icon-button" onClick={() => setResidentDetails(null)} aria-label="Close resident details">×</button>
+              </header>
+              <div className="resident-drawer-scroll">
+                {error && <div className="alert alert-error" role="alert">{error}</div>}
+                <section className="resident-drawer-section">
+                  <h3>Resident information</h3>
+                  <dl className="resident-drawer-details">
+                    <div><dt>Mobile number</dt><dd>{residentDetails.mobileNumber || "—"}</dd></div>
+                    <div><dt>Father’s name</dt><dd>{residentDetails.fatherName || "—"}</dd></div>
+                    <div><dt>Room / sharing</dt><dd>{residentDetails.roomNumber || "—"} · {residentDetails.sharing ? sharingLabel(residentDetails.sharing) : "—"}</dd></div>
+                    <div><dt>Monthly rent</dt><dd>{formatCurrency(residentDetails.rent)}</dd></div>
+                    <div><dt>Advance</dt><dd>{formatCurrency(residentDetails.advanceAmount)}</dd></div>
+                    <div><dt>Joining date</dt><dd>{residentDetails.joiningDate || "—"}</dd></div>
+                    <div><dt>Vacated date</dt><dd>{residentDetails.vacatedDate || "—"}</dd></div>
+                  </dl>
+                </section>
+                <section className="resident-drawer-section">
+                  <h3>Addresses</h3>
+                  <dl className="resident-drawer-details resident-address-details">
+                    <div><dt>Permanent address</dt><dd>{residentDetails.permanentAddress || "—"}</dd></div>
+                    <div><dt>Company address</dt><dd>{residentDetails.companyAddress || "—"}</dd></div>
+                  </dl>
+                </section>
+                <section className="resident-drawer-section">
+                  <div className="resident-trend-heading">
+                    <div><h3>Rent payment trend</h3><p>Payment status by month</p></div>
+                    <div className="resident-trend-years">
+                      <button type="button" className="button button-light" aria-label="Previous trend year" disabled={residentDetailsLoading || residentTrendYear <= Number(residentDetails.joiningDate.slice(0, 4))} onClick={() => changeResidentTrendYear(residentTrendYear - 1)}>‹</button>
+                      <strong>{residentTrendYear}</strong>
+                      <button type="button" className="button button-light" aria-label="Next trend year" disabled={residentDetailsLoading || residentTrendYear >= new Date().getFullYear()} onClick={() => changeResidentTrendYear(residentTrendYear + 1)}>›</button>
+                    </div>
+                  </div>
+                  {residentDetailsLoading ? <p className="muted" role="status">Loading rent history…</p> : (
+                    <div className="resident-trend-grid">
+                      {Array.from({ length: 12 }, (_, index) => {
+                        const month = index + 1;
+                        const joining = new Date(`${residentDetails.joiningDate}T00:00:00`);
+                        const period = new Date(residentTrendYear, index, 1);
+                        const future = period > new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+                        if (period < new Date(joining.getFullYear(), joining.getMonth(), 1) || future) return null;
+                        const payment = residentTrendPayments.find((entry) => entry.month === month);
+                        return (
+                          <div className={`resident-trend-month${payment?.paid ? " trend-paid" : " trend-unpaid"}`} key={month}>
+                            <span>{new Date(residentTrendYear, index, 1).toLocaleString(undefined, { month: "short" })}</span>
+                            <strong>{payment?.paid ? "Paid" : "Pending"}</strong>
+                            {payment?.paid && <small>{formatCurrency(payment.amount)}</small>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+                <section className="resident-drawer-section">
+                  <h3>Documents</h3>
+                  <div className="resident-drawer-documents">
+                    {residentDetails.hasPhoto
+                      ?                       <button type="button" className="button button-light" onClick={() => { setResidentDetails(null); viewDocument(residentDetails, "photo"); }}>View photo</button>
+                      : <span className="missing-document">No photo uploaded</span>}
+                    {residentDetails.hasIdentityProof
+                      ? <button type="button" className="button button-light" onClick={() => { setResidentDetails(null); viewDocument(residentDetails, "identity-proof"); }}>View identity proof</button>
+                      : <span className="missing-document">No identity proof uploaded</span>}
+                  </div>
+                </section>
+              </div>
+              <footer className="resident-drawer-actions">
+                <button type="button" className="resident-action-button action-history" disabled={loading || residentDetailsLoading} onClick={() => openRentPayments(residentDetails)}>Rent history</button>
+                <button type="button" className="resident-action-button action-edit" disabled={loading} onClick={() => { setResidentDetails(null); startEdit(residentDetails); }}>Edit</button>
+                {residentDetails.status === "ACTIVE" && <button type="button" className="resident-action-button action-vacate" disabled={loading} onClick={() => markVacated(residentDetails)}>Vacate</button>}
+                <button type="button" className="resident-action-button action-delete" disabled={loading} onClick={() => permanentlyDeleteResident(residentDetails)}>Delete</button>
+              </footer>
+            </aside>
+          </div>
+        )}
 
         {rentPaymentResident && (
           <div className="dialog-backdrop" onClick={() => setRentPaymentResident(null)}>
