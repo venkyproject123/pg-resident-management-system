@@ -1239,9 +1239,23 @@ function App() {
     : null;
   const currentPaymentPeriod = getCurrentPaymentPeriod();
   const ownerWorkspaceOpen = !monthlyPaymentsOpen && !emptyBedsOpen;
+  const homePageActive = ownerWorkspaceOpen && !profileOpen;
+  const activePage = profileOpen
+    ? "settings"
+    : monthlyPaymentsOpen
+      ? "payments"
+      : emptyBedsOpen
+        ? "rooms"
+        : "home";
+  const activePageLabel = {
+    home: "Home",
+    payments: "Manage payments",
+    rooms: "Manage rooms/beds",
+    settings: "PG settings"
+  }[activePage];
 
   return (
-    <main className="dashboard">
+    <main className={`dashboard dashboard-view-${activePage}`}>
       <header className="topbar">
         <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
           event.preventDefault();
@@ -1252,8 +1266,20 @@ function App() {
         </a>
         <div className="topbar-right">
           <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
-          <button className="button button-primary" type="button" onClick={goToDashboardHome}>Home</button>
-          <button className="button button-primary" onClick={openProfileSettings}>PG settings</button>
+          <span className={`active-page-indicator active-page-${activePage}`} aria-current="page">{activePageLabel}</span>
+          <button
+            className="button button-primary"
+            type="button"
+            aria-current={homePageActive ? "page" : undefined}
+            onClick={goToDashboardHome}
+          >Home</button>
+          <button
+            className="button button-primary"
+            type="button"
+            aria-expanded={profileOpen}
+            aria-controls="pg-settings-dialog"
+            onClick={openProfileSettings}
+          >PG settings</button>
           <button className="button button-primary" onClick={logout}>Sign out</button>
         </div>
       </header>
@@ -1512,7 +1538,7 @@ function App() {
             </div>
 
             {profileOpen && <div className="dialog-backdrop">
-              <section className="resident-dialog panel document-viewer" role="dialog" aria-modal="true" aria-labelledby="pg-settings-title">
+              <section className="resident-dialog panel document-viewer settings-dialog" id="pg-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="pg-settings-title">
                 <div className="panel-heading">
                   <div><p className="eyebrow">PROPERTY SETTINGS</p><h2 id="pg-settings-title">PG details</h2></div>
                   <button className="icon-button" onClick={() => setProfileOpen(false)} aria-label="Close PG settings">×</button>
