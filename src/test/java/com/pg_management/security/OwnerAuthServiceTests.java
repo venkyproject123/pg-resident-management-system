@@ -45,19 +45,32 @@ class OwnerAuthServiceTests {
 
 	@Test
 	void registrationCreatesAnUnapprovedOwnerWithoutOtp() {
-		when(ownerAccountRepository.existsByUsername("new-owner")).thenReturn(false);
+		when(ownerAccountRepository.existsByUsername("owner@example.com")).thenReturn(false);
 		when(ownerAccountRepository.existsByMobileNumber("+919876543210")).thenReturn(false);
 		when(ownerAccountRepository.saveAndFlush(any(OwnerAccount.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
 
 		ownerAuthService.registerOwner(
-				"new-owner", "long-password-here", "Sample PG", "Madhapur, Hyderabad", "9876543210");
+				"Owner Name",
+				"9876543210",
+				"OWNER@example.com",
+				"Sample PG",
+				"boys",
+				"Madhapur",
+				"Hyderabad",
+				"long-password-here");
 
 		org.mockito.ArgumentCaptor<OwnerAccount> owner = org.mockito.ArgumentCaptor.forClass(OwnerAccount.class);
 		verify(ownerAccountRepository).saveAndFlush(owner.capture());
 		assertFalse(owner.getValue().isApproved());
 		assertTrue(passwordEncoder.matches("long-password-here", owner.getValue().getPasswordHash()));
+		assertEquals("owner@example.com", owner.getValue().getUsername());
 		assertEquals("+919876543210", owner.getValue().getMobileNumber());
+		assertEquals("Owner Name", owner.getValue().getOwnerName());
+		assertEquals("Sample PG", owner.getValue().getPgName());
+		assertEquals("BOYS", owner.getValue().getPropertyType());
+		assertEquals("Madhapur", owner.getValue().getLocality());
+		assertEquals("Hyderabad", owner.getValue().getCity());
 		assertEquals("Madhapur, Hyderabad", owner.getValue().getLocation());
 		verify(jdbcTemplate, org.mockito.Mockito.never()).update(any(String.class), any(Object.class));
 	}
@@ -68,9 +81,36 @@ class OwnerAuthServiceTests {
 				org.junit.jupiter.api.Assertions.assertThrows(
 						org.springframework.web.server.ResponseStatusException.class,
 						() -> ownerAuthService.registerOwner(
-								"ADMIN", "long-password-here", "Sample PG", "Area", "9876543210"));
+								"Owner Name",
+								"9876543210",
+								"ADMIN",
+								"Sample PG",
+								"BOYS",
+								"Area",
+								"City",
+								"long-password-here"));
 
 		assertTrue(exception.getReason().contains("reserved"));
+	}
+
+	@Test
+	void registrationRejectsAnAlreadyRegisteredMobileNumber() {
+		when(ownerAccountRepository.existsByUsername("owner@example.com")).thenReturn(false);
+		when(ownerAccountRepository.existsByMobileNumber("+919876543210")).thenReturn(true);
+
+		var exception = org.junit.jupiter.api.Assertions.assertThrows(
+				org.springframework.web.server.ResponseStatusException.class,
+				() -> ownerAuthService.registerOwner(
+				"Owner Name",
+				"9876543210",
+				"owner@example.com",
+				"Sample PG",
+				"BOYS",
+				"Madhapur",
+				"Hyderabad",
+				"long-password-here"));
+
+		assertTrue(exception.getReason().contains("mobile number is already registered"));
 	}
 
 	@Test
@@ -113,36 +153,6 @@ class OwnerAuthServiceTests {
 		assertEquals("owner", pendingOwners.get(0).username());
 		assertEquals("+919876543210", pendingOwners.get(0).mobileNumber());
 		assertEquals("Madhapur, Hyderabad", pendingOwners.get(0).location());
-	}
-
-	@Test
-	void updateProfileChangesUsernameAndPropertyDetails() {
-		OwnerAccount owner = new OwnerAccount("old-name", "hash", "Sample PG", "+919876543210");
-		when(ownerAccountRepository.findByUsername("old-name")).thenReturn(Optional.of(owner));
-		when(ownerAccountRepository.findByUsername("new-name")).thenReturn(Optional.empty());
-		var request = new OwnerAuthService.ProfileUpdateRequest(
-				"new-name", "Updated PG", "Madhapur, Hyderabad");
-
-		ownerAuthService.updateProfile("old-name", request);
-
-		assertEquals("new-name", owner.getUsername());
-		assertEquals("Madhapur, Hyderabad", owner.getLocation());
-		assertEquals("Updated PG", owner.getPgName());
-		verify(ownerAccountRepository).save(owner);
-	}
-
-	@Test
-	void updateProfileRejectsAdminUsername() {
-		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210");
-		when(ownerAccountRepository.findByUsername("owner")).thenReturn(Optional.of(owner));
-		var request = new OwnerAuthService.ProfileUpdateRequest(
-				"ADMIN", "Sample PG", "Area");
-
-		var exception = org.junit.jupiter.api.Assertions.assertThrows(
-				org.springframework.web.server.ResponseStatusException.class,
-				() -> ownerAuthService.updateProfile("owner", request));
-
-		assertTrue(exception.getReason().contains("reserved"));
 	}
 
 	@Test

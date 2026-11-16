@@ -19,7 +19,7 @@ public class OwnerAccount {
 	@Column(name = "account_scope", nullable = false, unique = true, length = 16)
 	private String accountScope = "OWNER";
 
-	@Column(nullable = false, unique = true, length = 50)
+	@Column(nullable = false, unique = true, length = 100)
 	private String username;
 
 	@Column(name = "password_hash", nullable = false, length = 100)
@@ -28,10 +28,22 @@ public class OwnerAccount {
 	@Column(name = "pg_name", nullable = false, length = 100)
 	private String pgName;
 
-	@Column(name = "location", length = 150)
+	@Column(name = "owner_name", length = 100)
+	private String ownerName;
+
+	@Column(name = "property_type", length = 20)
+	private String propertyType;
+
+	@Column(name = "locality", length = 100)
+	private String locality;
+
+	@Column(name = "city", length = 100)
+	private String city;
+
+	@Column(name = "location", length = 205)
 	private String location;
 
-	@Column(name = "mobile_number", length = 20)
+	@Column(name = "mobile_number", length = 20, unique = true)
 	private String mobileNumber;
 
 	@Column(nullable = false, columnDefinition = "boolean not null default true")
@@ -56,10 +68,28 @@ public class OwnerAccount {
 
 	public OwnerAccount(
 			String username, String passwordHash, String pgName, String location, String mobileNumber, boolean approved) {
+		this(username, passwordHash, pgName, null, null, null, null, location, mobileNumber, approved);
+	}
+
+	public OwnerAccount(
+			String username,
+			String passwordHash,
+			String pgName,
+			String ownerName,
+			String propertyType,
+			String locality,
+			String city,
+			String location,
+			String mobileNumber,
+			boolean approved) {
 		this.accountScope = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 		this.username = username;
 		this.passwordHash = passwordHash;
 		this.pgName = pgName;
+		this.ownerName = ownerName;
+		this.propertyType = propertyType;
+		this.locality = locality;
+		this.city = city;
 		this.location = location;
 		this.mobileNumber = mobileNumber;
 		this.approved = approved;
@@ -83,6 +113,22 @@ public class OwnerAccount {
 
 	public String getPgName() {
 		return pgName;
+	}
+
+	public String getOwnerName() {
+		return ownerName;
+	}
+
+	public String getPropertyType() {
+		return propertyType;
+	}
+
+	public String getLocality() {
+		return locality;
+	}
+
+	public String getCity() {
+		return city;
 	}
 
 	public String getLocation() {
@@ -110,19 +156,22 @@ public class OwnerAccount {
 		this.removed = true;
 	}
 
-	public void updatePgName(String pgName) {
-		this.pgName = pgName;
-	}
-
-	public void updateUsername(String username) {
-		this.username = username;
-	}
-
-	public void updateLocation(String location) {
-		this.location = location;
-	}
-
 	public void changePassword(String passwordHash) {
 		this.passwordHash = passwordHash;
+	}
+
+	public void setRegistrationDetails(
+			String ownerName,
+			String propertyType,
+			String locality,
+			String city,
+			String location,
+			String mobileNumber) {
+		this.ownerName = ownerName;
+		this.propertyType = propertyType;
+		this.locality = locality;
+		this.city = city;
+		this.location = location;
+		this.mobileNumber = mobileNumber;
 	}
 }

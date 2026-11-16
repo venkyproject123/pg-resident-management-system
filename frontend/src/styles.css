@@ -564,6 +564,101 @@ td { font-size: 13px; }
   .rent-history-start { margin-right: 14px; margin-left: 14px; font-size: 13px; line-height: 1.5; }
 }
 
+/* PGCaptain-inspired authentication: dark product stage with a focused sign-in sheet. */
+.pgcaptain-auth-shell {
+  align-content: end;
+  min-height: 100dvh;
+  padding: 0;
+  background:
+    radial-gradient(circle at 18% 14%, #1d3334 0, transparent 32%),
+    linear-gradient(180deg, #11191a 0 42%, #e8ebea 42% 100%);
+}
+.pgcaptain-auth-shell::before {
+  display: block;
+  position: absolute;
+  top: 56px;
+  left: max(24px, calc((100vw - 560px) / 2));
+  width: min(560px, calc(100vw - 48px));
+  color: #bcc4c3;
+  content: "Occupancy, rent collection, dues, rooms and resident records — built for the way Indian PGs actually run.";
+  font-size: 16px;
+  line-height: 1.65;
+}
+.pgcaptain-auth-card {
+  width: min(720px, 100%);
+  min-height: 58vh;
+  margin: 0 auto;
+  padding: 42px max(28px, calc((100% - 590px) / 2));
+  border: 1px solid #d2dbd8;
+  border-radius: 22px 22px 0 0;
+  background: #eef1f0;
+  box-shadow: 0 -10px 30px #00000018;
+}
+.pgcaptain-auth-card > .brand { margin: 0 0 28px; color: #182022; }
+.pgcaptain-auth-card .brand-mark { background: #087d89; }
+.pgcaptain-auth-intro { margin-bottom: 24px; }
+.pgcaptain-auth-intro .eyebrow { color: #0e7b86; }
+.pgcaptain-auth-intro h1 { margin: 0; color: #151c1e; font-size: clamp(30px, 5vw, 41px); letter-spacing: -1.8px; }
+.pgcaptain-auth-intro .muted { margin: 10px 0 0; color: #687374; font-size: 16px; }
+.login-method-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 4px; border-radius: 12px; background: #d9dddd; }
+.login-method-tabs button { min-height: 51px; border: 0; border-radius: 9px; background: transparent; color: #5c6668; font-size: 15px; font-weight: 700; }
+.login-method-tabs button.active { background: #fff; box-shadow: 0 2px 4px #202a2b24; color: #172023; }
+.pgcaptain-form-surface { margin-top: 20px; padding: 28px; border: 1px solid #e1e5e3; border-radius: 16px; background: #fff; box-shadow: 0 1px 2px #1a23230d; }
+.pgcaptain-form-surface .button-primary { min-height: 56px; background: #121a1c; font-size: 16px; }
+.pgcaptain-form-surface .button-primary:hover:not(:disabled) { background: #263235; }
+.pgcaptain-form-surface label { color: #717a7c; font-size: 12px; letter-spacing: .8px; text-transform: uppercase; }
+.pgcaptain-form-surface input { height: 58px; border-color: #d2d9d6; border-radius: 12px; color: #1d2729; font-size: 17px; letter-spacing: normal; text-transform: none; }
+.mobile-input { display: flex; align-items: center; overflow: hidden; border: 1px solid #d2d9d6; border-radius: 12px; }
+.mobile-input b { display: grid; width: 86px; height: 58px; place-items: center; border-right: 1px solid #d2d9d6; color: #667174; font-size: 17px; font-weight: 500; letter-spacing: normal; }
+.mobile-input input { height: 56px; border: 0; border-radius: 0; }
+.mobile-input:focus-within { border-color: #087d89; box-shadow: 0 0 0 3px #087d891c; }
+.otp-help { margin: 0; color: #667174; font-size: 14px; line-height: 1.5; }
+.otp-code { letter-spacing: .5em !important; text-align: center; }
+.otp-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 14px; }
+.auth-register-link { margin: 25px 0 0; color: #727b7d; text-align: center; font-size: 15px; }
+.auth-register-link button { border: 0; background: transparent; color: #087d89; font-weight: 700; }
+.pgcaptain-auth-card .auth-back-button { margin-top: 25px; color: #587174; }
+@media (max-width: 540px) {
+  .pgcaptain-auth-shell::before { top: 48px; left: 30px; width: calc(100vw - 60px); font-size: 15px; }
+  .pgcaptain-auth-card { min-height: 64vh; padding: 28px 20px 34px; border-radius: 18px 18px 0 0; }
+  .pgcaptain-auth-card > .brand { margin-bottom: 22px; }
+  .pgcaptain-form-surface { padding: 20px; }
+  .login-method-tabs button { min-height: 46px; font-size: 13px; }
+}
+.registration-auth-shell { align-content: start; padding: 88px 20px 36px; }
+.registration-auth-shell::before { top: 22px; left: 50%; width: min(840px, calc(100vw - 40px)); transform: translateX(-50%); }
+.registration-auth-shell .pgcaptain-auth-card {
+  width: min(900px, 100%);
+  min-height: 0;
+  padding: 30px 38px 26px;
+  border-radius: 22px;
+}
+.registration-auth-shell .pgcaptain-auth-card > .brand { margin-bottom: 18px; }
+.registration-auth-shell .pgcaptain-auth-intro { margin-bottom: 16px; }
+.auth-registration-form { gap: 18px; }
+.auth-registration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
+.auth-registration-grid > label { min-width: 0; }
+.auth-registration-grid .password-field { gap: 8px; }
+.auth-registration-grid .field-help { margin-top: 0; }
+.pgcaptain-form-surface select {
+  height: 58px;
+  padding: 0 14px;
+  border: 1px solid #d2d9d6;
+  border-radius: 12px;
+  background: #fff;
+  color: #1d2729;
+  font-size: 16px;
+}
+.pgcaptain-form-surface select:focus { border-color: #087d89; box-shadow: 0 0 0 3px #087d891c; outline: none; }
+.auth-registration-note { margin: -5px 0 0; color: #788283; font-size: 12px; text-align: center; }
+@media (max-width: 540px) {
+  .registration-auth-shell { padding: 92px 12px 20px; }
+  .registration-auth-shell::before { top: 15px; left: 20px; width: calc(100vw - 40px); transform: none; }
+  .registration-auth-shell .pgcaptain-auth-card { padding: 23px 15px 20px; border-radius: 18px; }
+  .auth-registration-grid { grid-template-columns: minmax(0, 1fr); gap: 13px; }
+  .auth-registration-form { padding: 16px; }
+}
+
 .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .stat-card { min-width: 0; }
 .stat-card > div { min-width: 0; }

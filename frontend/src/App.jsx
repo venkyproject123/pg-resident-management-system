@@ -28,6 +28,12 @@ function encodeBasicCredentials(credentials) {
   return btoa(binary);
 }
 
+function authorizationValue(credentials) {
+  return credentials?.accessToken
+    ? `Bearer ${credentials.accessToken}`
+    : `Basic ${encodeBasicCredentials(credentials)}`;
+}
+
 function SecretInput(props) {
   const [visible, setVisible] = useState(false);
   return (
@@ -60,7 +66,7 @@ function ResidentAvatar({ resident, credentials, className = "avatar" }) {
     let active = true;
     let objectUrl = "";
     fetch(apiUrl(`${RESIDENTS_API}/${resident.id}/photo`), {
-      headers: { Authorization: `Basic ${encodeBasicCredentials(credentials)}` },
+      headers: { Authorization: authorizationValue(credentials) },
       cache: "no-store"
     }).then((response) => {
       if (!response.ok) throw new Error("Photo unavailable");
@@ -84,12 +90,12 @@ async function request(
   path,
   credentials,
   options = {},
-  unauthorizedMessage = "Login failed. Check the owner username and password."
+  unauthorizedMessage = "Sign-in failed. Check your email and password."
 ) {
   const response = await fetch(apiUrl(path), {
     ...options,
     headers: {
-      Authorization: `Basic ${encodeBasicCredentials(credentials)}`,
+      Authorization: authorizationValue(credentials),
     ...(options.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
       ...options.headers
     }
@@ -188,6 +194,11 @@ function App() {
     savedSession?.type === "owner" ? savedSession.credentials : null
   );
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [loginMethod, setLoginMethod] = useState("OTP");
+  const [otpForm, setOtpForm] = useState({ mobileNumber: "", code: "" });
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [otpResendAt, setOtpResendAt] = useState(0);
+  const [otpResendSeconds, setOtpResendSeconds] = useState(0);
   const [adminCredentials, setAdminCredentials] = useState(
     savedSession?.type === "admin" ? savedSession.credentials : null
   );
@@ -195,12 +206,30 @@ function App() {
   const [pendingOwners, setPendingOwners] = useState([]);
   const [approvedOwners, setApprovedOwners] = useState([]);
   const [authMode, setAuthMode] = useState("LANDING");
-  const [setupForm, setSetupForm] = useState({ username: "", password: "", pgName: "", location: "", mobileNumber: "" });
+  const [setupForm, setSetupForm] = useState({
+    ownerName: "",
+    mobileNumber: "",
+    email: "",
+    pgName: "",
+    propertyType: "",
+    locality: "",
+    city: "",
+    password: "",
+    confirmPassword: ""
+  });
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
   const [registrationCredentials, setRegistrationCredentials] = useState(null);
   const [registrationApproved, setRegistrationApproved] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ username: "", pgName: "", location: "" });
+  const [profileForm, setProfileForm] = useState({
+    username: "",
+    pgName: "",
+    location: "",
+    mobileNumber: "",
+    ownerName: "",
+    propertyType: "",
+    locality: "",
+    city: ""
+  });
   const [residentPage, setResidentPage] = useState({
     content: [],
     page: 0,
@@ -342,6 +371,16 @@ function App() {
   const residents = residentPage.content;
 
   useEffect(() => {
+    if (!otpResendAt) return undefined;
+    const updateCountdown = () => {
+      setOtpResendSeconds(Math.max(0, Math.ceil((otpResendAt - Date.now()) / 1000)));
+    };
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [otpResendAt]);
+
+  useEffect(() => {
     if (savedSession) {
       let mounted = true;
       setLoading(true);
@@ -353,7 +392,12 @@ function App() {
             setProfileForm({
               username: profile.username,
               pgName: profile.pgName,
-              location: profile.location || ""
+              location: profile.location || "",
+              mobileNumber: profile.mobileNumber?.replace(/^\+91/, "") || "",
+              ownerName: profile.ownerName || "",
+              propertyType: profile.propertyType || "",
+              locality: profile.locality || "",
+              city: profile.city || ""
             });
           } else {
             const overview = await request(
@@ -540,14 +584,23 @@ function App() {
     event.preventDefault();
     setLoading(true);
     setError("");
+    const ownerCredentials = {
+      ...loginForm,
+      username: loginForm.username.trim().toLowerCase()
+    };
     try {
-      const profile = await request("/api/owner/profile", loginForm);
+      const profile = await request("/api/owner/profile", ownerCredentials);
       setProfileForm({
         username: profile.username,
         pgName: profile.pgName,
-        location: profile.location || ""
+        location: profile.location || "",
+        mobileNumber: profile.mobileNumber?.replace(/^\+91/, "") || "",
+        ownerName: profile.ownerName || "",
+        propertyType: profile.propertyType || "",
+        locality: profile.locality || "",
+        city: profile.city || ""
       });
-      setCredentials(loginForm);
+      setCredentials(ownerCredentials);
       setNotice("");
     } catch (requestError) {
       setError(requestError.message);
@@ -562,16 +615,90 @@ function App() {
       setError("You need to enter a password with at least 12 characters.");
       return;
     }
+    if (setupForm.password !== setupForm.confirmPassword) {
+      setError("The passwords do not match.");
+      return;
+    }
     setLoading(true);
     setError("");
     setNotice("");
     try {
-      await publicRequest("/api/owner/setup", setupForm);
-      setRegistrationSuccessPgName(setupForm.pgName.trim());
-      setRegistrationCredentials({ username: setupForm.username, password: setupForm.password });
+      const normalizedEmail = setupForm.email.trim().toLowerCase();
+      await publicRequest("/api/owner/setup", {
+        ownerName: setupForm.ownerName.trim(),
+        mobileNumber: setupForm.mobileNumber,
+        email: normalizedEmail,
+        pgName: setupForm.pgName.trim(),
+        propertyType: setupForm.propertyType,
+        locality: setupForm.locality.trim(),
+        city: setupForm.city.trim(),
+        password: setupForm.password
+      });
+      setRegistrationSuccessPgName(normalizedEmail);
+      setRegistrationCredentials({ username: normalizedEmail, password: setupForm.password });
       setRegistrationApproved(false);
-      setSetupForm({ username: "", password: "", pgName: "", location: "", mobileNumber: "" });
+      setSetupForm({
+        ownerName: "",
+        mobileNumber: "",
+        email: "",
+        pgName: "",
+        propertyType: "",
+        locality: "",
+        city: "",
+        password: "",
+        confirmPassword: ""
+      });
       setAuthMode("REGISTRATION_SUCCESS");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function requestOtp() {
+    setLoading(true);
+    setError("");
+    try {
+      await publicRequest("/api/owner/otp/request", { mobileNumber: otpForm.mobileNumber });
+      setOtpRequested(true);
+      setOtpResendAt(Date.now() + 60_000);
+      setOtpForm((current) => ({ ...current, code: "" }));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleRequestOtp(event) {
+    event.preventDefault();
+    return requestOtp();
+  }
+
+  async function handleVerifyOtp(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const session = await publicRequest("/api/owner/otp/verify", otpForm);
+      const ownerSession = { accessToken: session.accessToken };
+      const profile = await request("/api/owner/profile", ownerSession, {}, "Your OTP session expired. Please sign in again.");
+      setProfileForm({
+        username: profile.username,
+        pgName: profile.pgName,
+        location: profile.location || "",
+        mobileNumber: profile.mobileNumber?.replace(/^\+91/, "") || "",
+        ownerName: profile.ownerName || "",
+        propertyType: profile.propertyType || "",
+        locality: profile.locality || "",
+        city: profile.city || ""
+      });
+      setCredentials(ownerSession);
+      setOtpForm({ mobileNumber: "", code: "" });
+      setOtpRequested(false);
+      setOtpResendAt(0);
+      setNotice("");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -673,43 +800,6 @@ function App() {
     }
   }
 
-  async function openProfileSettings() {
-    setProfileOpen(true);
-    setLoading(true);
-    setError("");
-    setNotice("");
-    try {
-      const profile = await request("/api/owner/profile", credentials);
-      setProfileForm({ username: profile.username, pgName: profile.pgName, location: profile.location || "" });
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSaveProfile(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    setNotice("");
-    try {
-      await request("/api/owner/profile", credentials, {
-        method: "PUT",
-        body: JSON.stringify(profileForm)
-      });
-      const updatedCredentials = { ...credentials, username: profileForm.username.trim() };
-      setCredentials(updatedCredentials);
-      setLoginForm(updatedCredentials);
-      setProfileOpen(false);
-      setNotice("Username, PG name, and location updated.");
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function logout() {
     sessionStorage.removeItem("haven-auth-session");
     setCredentials(null);
@@ -729,7 +819,19 @@ function App() {
     setMonthlyPaymentReport(null);
     setMonthlyPaymentsOpen(false);
     setLoginForm({ username: "", password: "" });
-    setProfileForm({ username: "", pgName: "", location: "" });
+    setOtpForm({ mobileNumber: "", code: "" });
+    setOtpRequested(false);
+    setOtpResendAt(0);
+    setProfileForm({
+      username: "",
+      pgName: "",
+      location: "",
+      mobileNumber: "",
+      ownerName: "",
+      propertyType: "",
+      locality: "",
+      city: ""
+    });
     setSearchText("");
     setSelectedStatus("ACTIVE");
     setForm(emptyForm);
@@ -1157,16 +1259,18 @@ function App() {
                         <article className="admin-owner-card" key={owner.id}>
                           <div className="admin-owner-number">Owner No. {index + 1}</div>
                           <div className="admin-owner-card-main">
-                            <div className="admin-owner-avatar" aria-hidden="true">{owner.pgName.trim().charAt(0).toUpperCase()}</div>
+                                          <div className="admin-owner-avatar" aria-hidden="true">{(owner.ownerName || owner.pgName || "O").trim().charAt(0).toUpperCase()}</div>
                             <div className="admin-owner-info">
                               <div className="admin-owner-title">
                                 <strong>{owner.pgName}</strong>
                                 <span className={`owner-status ${status === "PENDING" ? "owner-status-pending" : "owner-status-approved"}`}>{status === "PENDING" ? "Pending" : "Approved"}</span>
                               </div>
                               <div className="admin-owner-details">
-                                <span><small>USERNAME</small>{owner.username}</span>
-                                <span><small>MOBILE NUMBER</small>{owner.mobileNumber}</span>
-                                <span><small>LOCATION / AREA</small>{owner.location || "Not provided"}</span>
+                                              {owner.ownerName && <span><small>OWNER</small>{owner.ownerName}</span>}
+                                              <span><small>EMAIL</small>{owner.username}</span>
+                                              <span><small>MOBILE NUMBER</small>{owner.mobileNumber || "Not provided"}</span>
+                                              {owner.propertyType && <span><small>OCCUPANCY</small>{owner.propertyType === "CO_LIVING" ? "Co-living" : owner.propertyType === "BOYS" ? "Boys" : "Girls"}</span>}
+                                              <span><small>LOCALITY · CITY</small>{[owner.locality, owner.city].filter(Boolean).join(", ") || owner.location || "Not provided"}</span>
                               </div>
                             </div>
                           </div>
@@ -1230,8 +1334,8 @@ function App() {
     }
 
     return (
-      <main className="login-shell">
-        <section className="login-card">
+      <main className={`login-shell pgcaptain-auth-shell${authMode === "SETUP" ? " registration-auth-shell" : ""}`}>
+        <section className="login-card pgcaptain-auth-card">
           <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
             event.preventDefault();
             setAuthMode("LANDING");
@@ -1241,8 +1345,12 @@ function App() {
             <span className="brand-mark">H</span>
             <span>haven<span className="brand-period">.</span></span>
           </a>
-          <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "PG REGISTRATION" : "OWNER PORTAL"}</p>
-          <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Register your PG" : authMode === "ADMIN_LOGIN" ? "Admin login" : "Owner login"}</h1>
+          <div className="pgcaptain-auth-intro">
+            <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "CREATE ACCOUNT" : "OWNER PORTAL"}</p>
+            <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your account" : authMode === "ADMIN_LOGIN" ? "Admin sign in" : "Sign in to Haven"}</h1>
+            {authMode === "LOGIN" && <p className="muted">Owners, managers and front-desk staff.</p>}
+            {authMode === "SETUP" && <p className="muted">Add your details and property information to request owner access.</p>}
+          </div>
           {authMode === "REGISTRATION_SUCCESS" && <p className="muted">{registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering ${registrationSuccessPgName}. Please wait for administrator approval.`}</p>}
           {authMode === "REGISTRATION_SUCCESS" && !registrationApproved && <div className="alert alert-success" role="status">Waiting for an administrator to approve your registration. This page will update when approved.</div>}
           {authMode === "REGISTRATION_SUCCESS" && registrationApproved && <button type="button" className="button button-primary button-wide" onClick={() => {
@@ -1253,54 +1361,67 @@ function App() {
           }}>Go to sign in</button>}
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
-          {authMode === "LOGIN" && <form className="stack-form" onSubmit={handleLogin}>
-            <label>
-              Username
-              <input
-                autoComplete="username"
-                required
-                value={loginForm.username}
-                onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })}
-              />
-            </label>
-            <label>
-              Password
-              <SecretInput
-                autoComplete="current-password"
-                required
-                value={loginForm.password}
-                onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
-              />
-            </label>
-            <button className="button button-primary button-wide" disabled={loading}>
-              {loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>}
+          {authMode === "LOGIN" && <>
+            <div className="login-method-tabs" role="tablist" aria-label="Sign-in method">
+              <button type="button" role="tab" aria-selected={loginMethod === "OTP"} className={loginMethod === "OTP" ? "active" : ""} onClick={() => { setLoginMethod("OTP"); setOtpRequested(false); setOtpResendAt(0); setError(""); }}>Phone OTP</button>
+              <button type="button" role="tab" aria-selected={loginMethod === "EMAIL"} className={loginMethod === "EMAIL" ? "active" : ""} onClick={() => { setLoginMethod("EMAIL"); setError(""); }}>Email & password</button>
+            </div>
+            <div className="pgcaptain-form-surface">
+              {loginMethod === "EMAIL" ? <form className="stack-form" onSubmit={handleLogin}>
+                <label>Email<input type="email" autoComplete="email" placeholder="you@yourpg.in" required value={loginForm.username} onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })} /></label>
+                <label>Password<SecretInput autoComplete="current-password" placeholder="Your password" required value={loginForm.password} onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })} /></label>
+                <button className="button button-primary button-wide" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
+              </form> : !otpRequested ? <form className="stack-form" onSubmit={handleRequestOtp}>
+                <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" placeholder="98765 43210" maxLength="10" pattern="[6-9][0-9]{9}" required value={otpForm.mobileNumber} onChange={(event) => setOtpForm({ ...otpForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
+                <button className="button button-primary button-wide" disabled={loading}>{loading ? "Sending…" : "Send OTP"}</button>
+              </form> : <form className="stack-form" onSubmit={handleVerifyOtp}>
+                <p className="otp-help">If this number is enabled for an approved account, enter the 6-digit code sent to +91 {otpForm.mobileNumber}.</p>
+                <label>One-time passcode<input className="otp-code" inputMode="numeric" autoComplete="one-time-code" placeholder="000000" maxLength="6" pattern="[0-9]{6}" required value={otpForm.code} onChange={(event) => setOtpForm({ ...otpForm, code: event.target.value.replace(/\D/g, "").slice(0, 6) })} /></label>
+                <button className="button button-primary button-wide" disabled={loading}>{loading ? "Verifying…" : "Verify & sign in"}</button>
+                <div className="otp-actions">
+                  <button type="button" className="text-action" disabled={loading || otpResendSeconds > 0} onClick={requestOtp}>
+                    {otpResendSeconds > 0 ? `Resend code in ${otpResendSeconds}s` : "Resend code"}
+                  </button>
+                  <button type="button" className="text-action" disabled={loading} onClick={() => { setOtpRequested(false); setOtpResendAt(0); setOtpForm({ mobileNumber: "", code: "" }); setError(""); }}>Use a different number</button>
+                </div>
+              </form>}
+            </div>
+            <p className="auth-register-link">New here? <button type="button" onClick={() => setAuthMode("SETUP")}>Register your property</button></p>
+          </>}
           {authMode === "ADMIN_LOGIN" && <form className="stack-form" onSubmit={handleAdminLogin}>
             <label>Admin username<input autoComplete="username" required value={adminLoginForm.username} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, username: event.target.value })} /></label>
             <label>Admin password<SecretInput autoComplete="current-password" required value={adminLoginForm.password} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, password: event.target.value })} /></label>
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Signing in…" : "Sign in as admin"}</button>
           </form>}
-          {authMode === "SETUP" && <form className="stack-form" onSubmit={handleSetupOwner}>
-            <label>PG name<input maxLength="100" required value={setupForm.pgName} onChange={(event) => setSetupForm({ ...setupForm, pgName: event.target.value })} /></label>
-            <label>Location / area<input maxLength="150" placeholder="e.g. Madhapur, Hyderabad" required value={setupForm.location} onChange={(event) => setSetupForm({ ...setupForm, location: event.target.value })} /></label>
-            <label>Username<input autoComplete="username" minLength="3" maxLength="50" required value={setupForm.username} onChange={(event) => setSetupForm({ ...setupForm, username: event.target.value })} /></label>
-            <label className="password-field">Password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" aria-describedby="registration-password-help" required value={setupForm.password} onChange={(event) => {
-              setSetupForm({ ...setupForm, password: event.target.value });
-            }} />
-              <span id="registration-password-help" className={`field-help${setupForm.password.length > 0 && setupForm.password.length < 12 ? " field-help-error" : ""}`} aria-live="polite">
-                {setupForm.password.length >= 12
-                  ? "Password length meets the 12-character minimum."
-                  : setupForm.password.length > 0
-                    ? `Use at least 12 characters (${setupForm.password.length}/12).`
-                    : "Use at least 12 characters."}
-              </span>
-            </label>
-            <label>
-              Mobile number
-              <input type="tel" placeholder="9876543210" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} />
-            </label>
+          {authMode === "SETUP" && <form className="stack-form pgcaptain-form-surface auth-registration-form" onSubmit={handleSetupOwner}>
+            <div className="auth-registration-grid">
+              <label>Owner name<input autoComplete="name" maxLength="100" placeholder="Your full name" required value={setupForm.ownerName} onChange={(event) => setSetupForm({ ...setupForm, ownerName: event.target.value })} /></label>
+              <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="98765 43210" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
+              <label>Email<input type="email" autoComplete="email" placeholder="you@example.com" maxLength="100" required value={setupForm.email} onChange={(event) => setSetupForm({ ...setupForm, email: event.target.value })} /></label>
+              <label>Property name<input autoComplete="organization" maxLength="100" placeholder="Your PG or co-living name" required value={setupForm.pgName} onChange={(event) => setSetupForm({ ...setupForm, pgName: event.target.value })} /></label>
+              <label>Occupancy type<select required value={setupForm.propertyType} onChange={(event) => setSetupForm({ ...setupForm, propertyType: event.target.value })}>
+                <option value="" disabled>Select occupancy type</option>
+                <option value="CO_LIVING">Co-living</option>
+                <option value="BOYS">Boys</option>
+                <option value="GIRLS">Girls</option>
+              </select></label>
+              <label>Locality<input autoComplete="address-level3" maxLength="100" placeholder="Area or neighbourhood" required value={setupForm.locality} onChange={(event) => setSetupForm({ ...setupForm, locality: event.target.value })} /></label>
+              <label>City<input autoComplete="address-level2" maxLength="100" placeholder="City" required value={setupForm.city} onChange={(event) => setSetupForm({ ...setupForm, city: event.target.value })} /></label>
+              <label className="password-field">Password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" aria-describedby="registration-password-help" required value={setupForm.password} onChange={(event) => setSetupForm({ ...setupForm, password: event.target.value })} />
+                <span id="registration-password-help" className={`field-help${setupForm.password.length > 0 && setupForm.password.length < 12 ? " field-help-error" : ""}`} aria-live="polite">
+                  {setupForm.password.length >= 12
+                    ? "Password length meets the 12-character minimum."
+                    : setupForm.password.length > 0
+                      ? `Use at least 12 characters (${setupForm.password.length}/12).`
+                      : "Use at least 12 characters."}
+                </span>
+              </label>
+              <label className="password-field">Retype password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" required value={setupForm.confirmPassword} onChange={(event) => setSetupForm({ ...setupForm, confirmPassword: event.target.value })} />
+                {setupForm.confirmPassword && setupForm.password !== setupForm.confirmPassword && <span className="field-help field-help-error" role="status">Passwords do not match.</span>}
+              </label>
+            </div>
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
+            <p className="auth-registration-note">Your account will be ready to sign in after administrator approval.</p>
           </form>}
           <button type="button" className="text-action auth-back-button" onClick={() => { setAuthMode("LANDING"); setError(""); setNotice(""); }}>← Back</button>
         </section>
@@ -1321,7 +1442,7 @@ function App() {
     : null;
   const currentPaymentPeriod = getCurrentPaymentPeriod();
   const ownerWorkspaceOpen = !monthlyPaymentsOpen && !emptyBedsOpen;
-  const homePageActive = ownerWorkspaceOpen && !profileOpen;
+  const homePageActive = ownerWorkspaceOpen;
 
   return (
     <main className="dashboard">
@@ -1341,13 +1462,6 @@ function App() {
             aria-current={homePageActive ? "page" : undefined}
             onClick={goToDashboardHome}
           >Home</button>
-          <button
-            className="button button-primary"
-            type="button"
-            aria-expanded={profileOpen}
-            aria-controls="pg-settings-dialog"
-            onClick={openProfileSettings}
-          >PG settings</button>
           <button className="button button-primary" onClick={logout}>Sign out</button>
         </div>
       </header>
@@ -1614,26 +1728,6 @@ function App() {
                 </form>
               </div>
             </div>
-
-            {profileOpen && <div className="dialog-backdrop">
-              <section className="resident-dialog panel document-viewer settings-dialog" id="pg-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="pg-settings-title">
-                <div className="panel-heading">
-                  <div><p className="eyebrow">PROPERTY SETTINGS</p><h2 id="pg-settings-title">PG details</h2></div>
-                  <button className="icon-button" onClick={() => setProfileOpen(false)} aria-label="Close PG settings">×</button>
-                </div>
-                {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
-                <form className="stack-form password-change-form" onSubmit={handleSaveProfile}>
-                  <label>Username<input autoComplete="username" minLength="3" maxLength="50" pattern="[A-Za-z0-9._-]+" required value={profileForm.username || ""} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value })} /></label>
-                  <label>PG name<input maxLength="100" required value={profileForm.pgName} onChange={(event) => setProfileForm({ ...profileForm, pgName: event.target.value })} /></label>
-                  <label>Location / area<input maxLength="150" required value={profileForm.location || ""} onChange={(event) => setProfileForm({ ...profileForm, location: event.target.value })} /></label>
-                  <p className="muted">Your username is used for your next sign-in. Contact your administrator if you need to reset your password.</p>
-                  <div className="form-footer-actions">
-                    <button type="button" className="button button-light" onClick={() => setProfileOpen(false)}>Cancel</button>
-                    <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving…" : "Save PG settings"}</button>
-                  </div>
-                </form>
-              </section>
-            </div>}
 
             {residentLoading && residents.length === 0 ? (
               <div className="directory-loading" role="status">Loading residents…</div>

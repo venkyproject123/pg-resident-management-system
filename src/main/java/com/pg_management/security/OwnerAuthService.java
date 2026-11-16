@@ -40,29 +40,33 @@ public class OwnerAuthService {
 	}
 
 	public void registerOwner(
-			String username,
-			String password,
+			String ownerName,
+			String mobileNumber,
+			String email,
 			String pgName,
-			String location,
-			String mobileNumber) {
+			String propertyType,
+			String locality,
+			String city,
+			String password) {
 		long startedAt = System.nanoTime();
-		long usernameLookupMs = 0;
+		long emailLookupMs = 0;
 		long mobileLookupMs = 0;
 		long passwordHashMs = 0;
 		long databaseSaveMs = 0;
 		try {
-			if (!adminUsername.isBlank() && username.equalsIgnoreCase(adminUsername)) {
-				throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is reserved");
+			String normalizedEmail = email.trim().toLowerCase();
+			if (!adminUsername.isBlank() && normalizedEmail.equalsIgnoreCase(adminUsername)) {
+				throw new ResponseStatusException(HttpStatus.CONFLICT, "That email is reserved");
 			}
 			long stageStartedAt = System.nanoTime();
-			boolean usernameExists = ownerAccountRepository.existsByUsername(username);
-			usernameLookupMs = elapsedMs(stageStartedAt);
-			if (usernameExists) {
-				throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already registered");
+			boolean emailExists = ownerAccountRepository.existsByUsername(normalizedEmail);
+			emailLookupMs = elapsedMs(stageStartedAt);
+			if (emailExists) {
+				throw new ResponseStatusException(HttpStatus.CONFLICT, "That email is already registered");
 			}
-			String normalizedNumber = mobileNumber.matches("[6-9][0-9]{9}") ? "+91" + mobileNumber : mobileNumber;
+			String normalizedMobileNumber = normalizeMobileNumber(mobileNumber);
 			stageStartedAt = System.nanoTime();
-			boolean mobileNumberExists = ownerAccountRepository.existsByMobileNumber(normalizedNumber);
+			boolean mobileNumberExists = ownerAccountRepository.existsByMobileNumber(normalizedMobileNumber);
 			mobileLookupMs = elapsedMs(stageStartedAt);
 			if (mobileNumberExists) {
 				throw new ResponseStatusException(HttpStatus.CONFLICT, "That mobile number is already registered");
@@ -71,13 +75,25 @@ public class OwnerAuthService {
 			String passwordHash = passwordEncoder.encode(password);
 			passwordHashMs = elapsedMs(stageStartedAt);
 			stageStartedAt = System.nanoTime();
+			String normalizedLocality = locality.trim();
+			String normalizedCity = city.trim();
+			String location = normalizedLocality + ", " + normalizedCity;
 			ownerAccountRepository.saveAndFlush(new OwnerAccount(
-					username, passwordHash, pgName.trim(), location.trim(), normalizedNumber, false));
+					normalizedEmail,
+					passwordHash,
+					pgName.trim(),
+					ownerName.trim(),
+					propertyType.trim().toUpperCase(),
+					normalizedLocality,
+					normalizedCity,
+					location,
+					normalizedMobileNumber,
+					false));
 			databaseSaveMs = elapsedMs(stageStartedAt);
 		} finally {
 			LOGGER.info(
-					"owner_registration usernameLookupMs={} mobileLookupMs={} passwordHashMs={} databaseSaveMs={} serviceDurationMs={}",
-					usernameLookupMs, mobileLookupMs, passwordHashMs, databaseSaveMs, elapsedMs(startedAt));
+					"owner_registration emailLookupMs={} mobileLookupMs={} passwordHashMs={} databaseSaveMs={} serviceDurationMs={}",
+					emailLookupMs, mobileLookupMs, passwordHashMs, databaseSaveMs, elapsedMs(startedAt));
 		}
 	}
 
@@ -86,7 +102,8 @@ public class OwnerAuthService {
 		return ownerAccountRepository.findAllByApprovedFalseAndRemovedFalseOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
 						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getMobileNumber(),
-						owner.getLocation()))
+						owner.getLocation(), owner.getOwnerName(), owner.getPropertyType(),
+						owner.getLocality(), owner.getCity()))
 				.toList();
 	}
 
@@ -95,7 +112,8 @@ public class OwnerAuthService {
 		return ownerAccountRepository.findAllByApprovedTrueAndRemovedFalseOrderByIdAsc().stream()
 				.map(owner -> new OwnerSummary(
 						owner.getId(), owner.getUsername(), owner.getPgName(), owner.getMobileNumber(),
-						owner.getLocation()))
+						owner.getLocation(), owner.getOwnerName(), owner.getPropertyType(),
+						owner.getLocality(), owner.getCity()))
 				.toList();
 	}
 
@@ -135,41 +153,48 @@ public class OwnerAuthService {
 	public OwnerProfile getProfile(String username) {
 		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
-		return new OwnerProfile(owner.getUsername(), owner.getPgName(), owner.getLocation());
+		return new OwnerProfile(
+				owner.getUsername(),
+				owner.getPgName(),
+				owner.getLocation(),
+				owner.getMobileNumber(),
+				owner.getOwnerName(),
+				owner.getPropertyType(),
+				owner.getLocality(),
+				owner.getCity());
 	}
 
-	public void updateProfile(String username, ProfileUpdateRequest request) {
-		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
-		String updatedUsername = request.username().trim();
-		if (!adminUsername.isBlank() && updatedUsername.equalsIgnoreCase(adminUsername)) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is reserved");
-		}
-		ownerAccountRepository.findByUsername(updatedUsername)
-				.filter(existingOwner -> !existingOwner.getId().equals(owner.getId()))
-				.ifPresent(existingOwner -> {
-					throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already registered");
-				});
-		owner.updateUsername(updatedUsername);
-		owner.updatePgName(request.pgName().trim());
-		owner.updateLocation(request.location().trim());
-		ownerAccountRepository.save(owner);
+	public record OwnerProfile(
+			String username,
+			String pgName,
+			String location,
+			String mobileNumber,
+			String ownerName,
+			String propertyType,
+			String locality,
+			String city) {
 	}
 
-	public record OwnerProfile(String username, String pgName, String location) {
-	}
-
-	public record OwnerSummary(Long id, String username, String pgName, String mobileNumber, String location) {
+	public record OwnerSummary(
+			Long id,
+			String username,
+			String pgName,
+			String mobileNumber,
+			String location,
+			String ownerName,
+			String propertyType,
+			String locality,
+			String city) {
 	}
 
 	public record OwnerOverview(List<OwnerSummary> pending, List<OwnerSummary> approved) {
 	}
 
-	public record ProfileUpdateRequest(
-			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(min = 3, max = 50)
-			@jakarta.validation.constraints.Pattern(regexp = "^[A-Za-z0-9._-]+$") String username,
-			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100) String pgName,
-			@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 150) String location) {
+	private String normalizeMobileNumber(String mobileNumber) {
+		if (mobileNumber == null || !mobileNumber.matches("[6-9][0-9]{9}")) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a valid 10-digit Indian mobile number");
+		}
+		return "+91" + mobileNumber;
 	}
 
 	private long elapsedMs(long startedAt) {
