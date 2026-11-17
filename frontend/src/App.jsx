@@ -194,11 +194,12 @@ function App() {
     savedSession?.type === "owner" ? savedSession.credentials : null
   );
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
-  const [loginMethod, setLoginMethod] = useState("OTP");
-  const [otpForm, setOtpForm] = useState({ mobileNumber: "", code: "" });
-  const [otpRequested, setOtpRequested] = useState(false);
-  const [otpResendAt, setOtpResendAt] = useState(0);
-  const [otpResendSeconds, setOtpResendSeconds] = useState(0);
+  const [recoveryForm, setRecoveryForm] = useState({
+    recoveryId: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [generatedRecoveryId, setGeneratedRecoveryId] = useState(null);
   const [adminCredentials, setAdminCredentials] = useState(
     savedSession?.type === "admin" ? savedSession.credentials : null
   );
@@ -369,16 +370,6 @@ function App() {
   }, [notice]);
 
   const residents = residentPage.content;
-
-  useEffect(() => {
-    if (!otpResendAt) return undefined;
-    const updateCountdown = () => {
-      setOtpResendSeconds(Math.max(0, Math.ceil((otpResendAt - Date.now()) / 1000)));
-    };
-    updateCountdown();
-    const intervalId = window.setInterval(updateCountdown, 1000);
-    return () => window.clearInterval(intervalId);
-  }, [otpResendAt]);
 
   useEffect(() => {
     if (savedSession) {
@@ -609,6 +600,35 @@ function App() {
     }
   }
 
+  async function handlePasswordReset(event) {
+    event.preventDefault();
+    if (recoveryForm.newPassword.length < 12) {
+      setError("Use a password with at least 12 characters.");
+      return;
+    }
+    if (recoveryForm.newPassword !== recoveryForm.confirmPassword) {
+      setError("The passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await publicRequest("/api/owner/password-recovery/reset", {
+        recoveryId: recoveryForm.recoveryId,
+        newPassword: recoveryForm.newPassword,
+        confirmPassword: recoveryForm.confirmPassword
+      });
+      setRecoveryForm({ recoveryId: "", newPassword: "", confirmPassword: "" });
+      setAuthMode("LOGIN");
+      setNotice("Your password has been changed. Sign in with your new password.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSetupOwner(event) {
     event.preventDefault();
     if (setupForm.password.length < 12) {
@@ -649,56 +669,6 @@ function App() {
         confirmPassword: ""
       });
       setAuthMode("REGISTRATION_SUCCESS");
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function requestOtp() {
-    setLoading(true);
-    setError("");
-    try {
-      await publicRequest("/api/owner/otp/request", { mobileNumber: otpForm.mobileNumber });
-      setOtpRequested(true);
-      setOtpResendAt(Date.now() + 60_000);
-      setOtpForm((current) => ({ ...current, code: "" }));
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleRequestOtp(event) {
-    event.preventDefault();
-    return requestOtp();
-  }
-
-  async function handleVerifyOtp(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const session = await publicRequest("/api/owner/otp/verify", otpForm);
-      const ownerSession = { accessToken: session.accessToken };
-      const profile = await request("/api/owner/profile", ownerSession, {}, "Your OTP session expired. Please sign in again.");
-      setProfileForm({
-        username: profile.username,
-        pgName: profile.pgName,
-        location: profile.location || "",
-        mobileNumber: profile.mobileNumber?.replace(/^\+91/, "") || "",
-        ownerName: profile.ownerName || "",
-        propertyType: profile.propertyType || "",
-        locality: profile.locality || "",
-        city: profile.city || ""
-      });
-      setCredentials(ownerSession);
-      setOtpForm({ mobileNumber: "", code: "" });
-      setOtpRequested(false);
-      setOtpResendAt(0);
-      setNotice("");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -774,6 +744,26 @@ function App() {
     }
   }
 
+  async function generateOwnerRecoveryId(owner) {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    setGeneratedRecoveryId(null);
+    try {
+      const result = await request(
+        `/api/admin/owners/${owner.id}/password-recovery-id`,
+        adminCredentials,
+        { method: "POST" },
+        "Admin authentication failed. Please sign in again."
+      );
+      setGeneratedRecoveryId({ ownerName: owner.ownerName || owner.pgName, recoveryId: result.recoveryId });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function removeOwner(owner) {
     const confirmed = window.confirm(
       `Remove ${owner.pgName} (${owner.username}) from Haven? They will no longer be able to sign in. Existing resident and payment records will be preserved.`
@@ -819,9 +809,7 @@ function App() {
     setMonthlyPaymentReport(null);
     setMonthlyPaymentsOpen(false);
     setLoginForm({ username: "", password: "" });
-    setOtpForm({ mobileNumber: "", code: "" });
-    setOtpRequested(false);
-    setOtpResendAt(0);
+    setRecoveryForm({ recoveryId: "", newPassword: "", confirmPassword: "" });
     setProfileForm({
       username: "",
       pgName: "",
@@ -1220,6 +1208,7 @@ function App() {
               setAdminLoginForm({ username: "", password: "" });
               setPendingOwners([]);
               setApprovedOwners([]);
+              setGeneratedRecoveryId(null);
               setAuthMode("LANDING");
               setError("");
               setNotice("");
@@ -1236,6 +1225,18 @@ function App() {
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
+            {generatedRecoveryId && <div className="admin-recovery-id" role="status">
+              <div><strong>Recovery ID for {generatedRecoveryId.ownerName}</strong><span>Give this ID directly to the owner. It expires in 24 hours and works once.</span></div>
+              <code>{generatedRecoveryId.recoveryId.match(/.{1,4}/g).join("-")}</code>
+              <button type="button" className="button button-light" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(generatedRecoveryId.recoveryId.match(/.{1,4}/g).join("-"));
+                  setNotice("Recovery ID copied. Share it directly with the owner.");
+                } catch {
+                  setNotice("Select and copy the recovery ID above, then share it directly with the owner.");
+                }
+              }}>Copy ID</button>
+            </div>}
             <div className="admin-total-card">
               <span>Total registered owners</span>
               <strong>{pendingOwners.length + approvedOwners.length}</strong>
@@ -1276,6 +1277,7 @@ function App() {
                           </div>
                           <div className="admin-owner-actions">
                             {status === "PENDING" && <button type="button" className="button button-primary" disabled={loading} onClick={() => approveOwner(owner.id)}>Approve owner</button>}
+                            {status === "APPROVED" && <button type="button" className="button button-light" disabled={loading} onClick={() => generateOwnerRecoveryId(owner)}>Generate recovery ID</button>}
                             <button type="button" className="button button-danger" disabled={loading} onClick={() => removeOwner(owner)}>Remove owner</button>
                           </div>
                         </article>
@@ -1335,6 +1337,33 @@ function App() {
 
     return (
       <main className={`login-shell pgcaptain-auth-shell${authMode === "SETUP" ? " registration-auth-shell" : ""}`}>
+        <aside className="auth-showcase">
+          <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
+            event.preventDefault();
+            setAuthMode("LANDING");
+            setError("");
+            setNotice("");
+          }}>
+            <span className="brand-mark">H</span>
+            <span>haven<span className="brand-period">.</span></span>
+          </a>
+          <div className="auth-showcase-copy">
+            <p className="eyebrow">A BETTER WAY TO RUN YOUR PG</p>
+            <h2>More time for people.<br /><span>Less time on paperwork.</span></h2>
+            <p>Keep residents, rooms and rent in one calm, clear workspace.</p>
+            <div className="auth-showcase-points" aria-label="Haven features">
+              <span><b>✓</b> Resident records in one place</span>
+              <span><b>✓</b> Room occupancy at a glance</span>
+              <span><b>✓</b> Rent tracking made simple</span>
+            </div>
+          </div>
+          <div className="auth-showcase-decoration" aria-hidden="true">
+            <span className="showcase-orbit showcase-orbit-one" />
+            <span className="showcase-orbit showcase-orbit-two" />
+            <span className="showcase-spark">✦</span>
+          </div>
+          <p className="auth-showcase-footer">Thoughtfully designed for everyday PG management.</p>
+        </aside>
         <section className="login-card pgcaptain-auth-card">
           <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
             event.preventDefault();
@@ -1346,10 +1375,11 @@ function App() {
             <span>haven<span className="brand-period">.</span></span>
           </a>
           <div className="pgcaptain-auth-intro">
-            <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "CREATE ACCOUNT" : "OWNER PORTAL"}</p>
-            <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your account" : authMode === "ADMIN_LOGIN" ? "Admin sign in" : "Sign in to Haven"}</h1>
+            <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "CREATE ACCOUNT" : authMode === "FORGOT_PASSWORD" ? "ACCOUNT RECOVERY" : "OWNER PORTAL"}</p>
+            <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your account" : authMode === "ADMIN_LOGIN" ? "Admin sign in" : authMode === "FORGOT_PASSWORD" ? "Reset your password" : "Sign in to Haven"}</h1>
             {authMode === "LOGIN" && <p className="muted">Owners, managers and front-desk staff.</p>}
             {authMode === "SETUP" && <p className="muted">Add your details and property information to request owner access.</p>}
+            {authMode === "FORGOT_PASSWORD" && <p className="muted">Ask the administrator for a recovery ID, then enter it below with your new password.</p>}
           </div>
           {authMode === "REGISTRATION_SUCCESS" && <p className="muted">{registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering ${registrationSuccessPgName}. Please wait for administrator approval.`}</p>}
           {authMode === "REGISTRATION_SUCCESS" && !registrationApproved && <div className="alert alert-success" role="status">Waiting for an administrator to approve your registration. This page will update when approved.</div>}
@@ -1362,37 +1392,36 @@ function App() {
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
           {authMode === "LOGIN" && <>
-            <div className="login-method-tabs" role="tablist" aria-label="Sign-in method">
-              <button type="button" role="tab" aria-selected={loginMethod === "OTP"} className={loginMethod === "OTP" ? "active" : ""} onClick={() => { setLoginMethod("OTP"); setOtpRequested(false); setOtpResendAt(0); setError(""); }}>Phone OTP</button>
-              <button type="button" role="tab" aria-selected={loginMethod === "EMAIL"} className={loginMethod === "EMAIL" ? "active" : ""} onClick={() => { setLoginMethod("EMAIL"); setError(""); }}>Email & password</button>
-            </div>
             <div className="pgcaptain-form-surface">
-              {loginMethod === "EMAIL" ? <form className="stack-form" onSubmit={handleLogin}>
+              <form className="stack-form" onSubmit={handleLogin}>
                 <label>Email<input type="email" autoComplete="email" placeholder="you@yourpg.in" required value={loginForm.username} onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })} /></label>
                 <label>Password<SecretInput autoComplete="current-password" placeholder="Your password" required value={loginForm.password} onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })} /></label>
                 <button className="button button-primary button-wide" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
-              </form> : !otpRequested ? <form className="stack-form" onSubmit={handleRequestOtp}>
-                <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" placeholder="98765 43210" maxLength="10" pattern="[6-9][0-9]{9}" required value={otpForm.mobileNumber} onChange={(event) => setOtpForm({ ...otpForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
-                <button className="button button-primary button-wide" disabled={loading}>{loading ? "Sending…" : "Send OTP"}</button>
-              </form> : <form className="stack-form" onSubmit={handleVerifyOtp}>
-                <p className="otp-help">If this number is enabled for an approved account, enter the 6-digit code sent to +91 {otpForm.mobileNumber}.</p>
-                <label>One-time passcode<input className="otp-code" inputMode="numeric" autoComplete="one-time-code" placeholder="000000" maxLength="6" pattern="[0-9]{6}" required value={otpForm.code} onChange={(event) => setOtpForm({ ...otpForm, code: event.target.value.replace(/\D/g, "").slice(0, 6) })} /></label>
-                <button className="button button-primary button-wide" disabled={loading}>{loading ? "Verifying…" : "Verify & sign in"}</button>
-                <div className="otp-actions">
-                  <button type="button" className="text-action" disabled={loading || otpResendSeconds > 0} onClick={requestOtp}>
-                    {otpResendSeconds > 0 ? `Resend code in ${otpResendSeconds}s` : "Resend code"}
-                  </button>
-                  <button type="button" className="text-action" disabled={loading} onClick={() => { setOtpRequested(false); setOtpResendAt(0); setOtpForm({ mobileNumber: "", code: "" }); setError(""); }}>Use a different number</button>
-                </div>
-              </form>}
+              </form>
             </div>
+            <p className="auth-forgot-link"><button type="button" onClick={() => {
+              setRecoveryForm({ recoveryId: "", newPassword: "", confirmPassword: "" });
+              setError("");
+              setNotice("");
+              setAuthMode("FORGOT_PASSWORD");
+            }}>Forgot password?</button></p>
             <p className="auth-register-link">New here? <button type="button" onClick={() => setAuthMode("SETUP")}>Register your property</button></p>
           </>}
-          {authMode === "ADMIN_LOGIN" && <form className="stack-form" onSubmit={handleAdminLogin}>
-            <label>Admin username<input autoComplete="username" required value={adminLoginForm.username} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, username: event.target.value })} /></label>
-            <label>Admin password<SecretInput autoComplete="current-password" required value={adminLoginForm.password} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, password: event.target.value })} /></label>
-            <button className="button button-primary button-wide" disabled={loading}>{loading ? "Signing in…" : "Sign in as admin"}</button>
-          </form>}
+          {authMode === "FORGOT_PASSWORD" && <div className="pgcaptain-form-surface">
+            <form className="stack-form" onSubmit={handlePasswordReset}>
+              <label>Recovery ID<input autoComplete="one-time-code" maxLength="19" placeholder="XXXX-XXXX-XXXX-XXXX" required value={recoveryForm.recoveryId} onChange={(event) => setRecoveryForm({ ...recoveryForm, recoveryId: event.target.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "").slice(0, 16) })} /></label>
+              <label>New password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" required value={recoveryForm.newPassword} onChange={(event) => setRecoveryForm({ ...recoveryForm, newPassword: event.target.value })} /></label>
+              <label>Confirm new password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" required value={recoveryForm.confirmPassword} onChange={(event) => setRecoveryForm({ ...recoveryForm, confirmPassword: event.target.value })} /></label>
+              <button className="button button-primary button-wide" disabled={loading}>{loading ? "Changing password…" : "Change password"}</button>
+            </form>
+          </div>}
+          {authMode === "ADMIN_LOGIN" && <div className="pgcaptain-form-surface">
+            <form className="stack-form" onSubmit={handleAdminLogin}>
+              <label>Admin username<input autoComplete="username" required value={adminLoginForm.username} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, username: event.target.value })} /></label>
+              <label>Admin password<SecretInput autoComplete="current-password" required value={adminLoginForm.password} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, password: event.target.value })} /></label>
+              <button className="button button-primary button-wide" disabled={loading}>{loading ? "Signing in…" : "Sign in as admin"}</button>
+            </form>
+          </div>}
           {authMode === "SETUP" && <form className="stack-form pgcaptain-form-surface auth-registration-form" onSubmit={handleSetupOwner}>
             <div className="auth-registration-grid">
               <label>Owner name<input autoComplete="name" maxLength="100" placeholder="Your full name" required value={setupForm.ownerName} onChange={(event) => setSetupForm({ ...setupForm, ownerName: event.target.value })} /></label>

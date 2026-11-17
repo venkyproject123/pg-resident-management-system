@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -54,6 +55,12 @@ public class OwnerAccount {
 
 	@Column(name = "rent_due_day", nullable = false, columnDefinition = "int not null default 5")
 	private int legacyRentDueDay = 5;
+
+	@Column(name = "recovery_id_hash", unique = true, length = 64)
+	private String recoveryIdHash;
+
+	@Column(name = "recovery_id_expires_at")
+	private Instant recoveryIdExpiresAt;
 
 	protected OwnerAccount() {
 	}
@@ -158,6 +165,24 @@ public class OwnerAccount {
 
 	public void changePassword(String passwordHash) {
 		this.passwordHash = passwordHash;
+	}
+
+	public String getRecoveryIdHash() {
+		return recoveryIdHash;
+	}
+
+	public Instant getRecoveryIdExpiresAt() {
+		return recoveryIdExpiresAt;
+	}
+
+	public void setRecoveryId(String recoveryIdHash, Instant expiresAt) {
+		this.recoveryIdHash = recoveryIdHash;
+		this.recoveryIdExpiresAt = expiresAt;
+	}
+
+	public void clearRecoveryId() {
+		this.recoveryIdHash = null;
+		this.recoveryIdExpiresAt = null;
 	}
 
 	public void setRegistrationDetails(

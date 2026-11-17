@@ -36,6 +36,9 @@ class AdminControllerTests {
 	private OwnerAuthService ownerAuthService;
 
 	@MockitoBean
+	private OwnerPasswordRecoveryService passwordRecoveryService;
+
+	@MockitoBean
 	private OwnerUserDetailsService ownerUserDetailsService;
 
 	@BeforeEach
@@ -67,6 +70,19 @@ class AdminControllerTests {
 				.andExpect(status().isNoContent());
 
 		verify(ownerAuthService).removeOwner(7L);
+	}
+
+	@Test
+	void adminCanGenerateOwnerPasswordRecoveryId() throws Exception {
+		when(passwordRecoveryService.generateRecoveryId(7L)).thenReturn("ABCDEFGHJKLMNPQR");
+
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+						.post("/api/admin/owners/7/password-recovery-id")
+						.header("Authorization", AUTHORIZATION))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.recoveryId").value("ABCDEFGHJKLMNPQR"));
+
+		verify(passwordRecoveryService).generateRecoveryId(7L);
 	}
 
 	@Test

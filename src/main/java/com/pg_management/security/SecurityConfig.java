@@ -6,7 +6,6 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -53,7 +52,6 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain securityFilterChain(
 			HttpSecurity http,
-			ObjectProvider<OtpLoginService> otpLoginService,
 			@Value("${app.logging.slow-request-threshold-ms:1000}") long slowRequestThresholdMs) throws Exception {
 		http
 			.cors(Customizer.withDefaults())
@@ -66,15 +64,11 @@ public class SecurityConfig {
 					.requestMatchers(
 							"/api/owner/setup-status",
 							"/api/owner/setup",
-							"/api/owner/otp/**").permitAll()
+							"/api/owner/password-recovery/**").permitAll()
 					.requestMatchers("/api/admin/**").hasRole("ADMIN")
 					.requestMatchers("/api/**").hasRole("OWNER")
 					.anyRequest().authenticated())
 			.httpBasic(Customizer.withDefaults());
-		otpLoginService.ifAvailable(otpService ->
-				http.addFilterBefore(new OwnerOtpAuthenticationFilter(otpService),
-						BasicAuthenticationFilter.class));
-
 		return http.build();
 	}
 }

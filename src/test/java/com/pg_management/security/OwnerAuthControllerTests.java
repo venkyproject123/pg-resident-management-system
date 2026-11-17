@@ -9,14 +9,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.Optional;
-
 import jakarta.servlet.DispatcherType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,37 +30,8 @@ class OwnerAuthControllerTests {
 	@MockitoBean
 	private OwnerUserDetailsService ownerUserDetailsService;
 
-	@MockitoBean
-	private OtpLoginService otpLoginService;
-
 	@Test
-	void otpAccessTokenAuthenticatesOwnerProfileRequests() throws Exception {
-		OwnerAccount owner = new OwnerAccount("owner@example.com", "hash", "Sample PG", "9876543210");
-		when(otpLoginService.ownerForAccessToken("test-access-token")).thenReturn(Optional.of(owner));
-		when(ownerAuthService.getProfile("owner@example.com"))
-				.thenReturn(new OwnerAuthService.OwnerProfile(
-						"owner@example.com",
-						"Sample PG",
-						"Madhapur, Hyderabad",
-						"+919876543210",
-						"Owner Name",
-						"BOYS",
-						"Madhapur",
-						"Hyderabad"));
-
-		mockMvc.perform(get("/api/owner/profile")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer test-access-token"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.username").value("owner@example.com"))
-				.andExpect(jsonPath("$.mobileNumber").value("+919876543210"))
-				.andExpect(jsonPath("$.ownerName").value("Owner Name"))
-				.andExpect(jsonPath("$.propertyType").value("BOYS"))
-				.andExpect(jsonPath("$.locality").value("Madhapur"))
-				.andExpect(jsonPath("$.city").value("Hyderabad"));
-	}
-
-	@Test
-	void ownerRegistrationNeedsNoOtpAndWaitsForAdminApproval() throws Exception {
+	void ownerRegistrationIsAcceptedAndWaitsForAdminApproval() throws Exception {
 		mockMvc.perform(post("/api/owner/setup")
 						.contentType("application/json")
 						.content("""
