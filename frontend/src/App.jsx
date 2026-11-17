@@ -119,7 +119,9 @@ async function request(
       notFoundError.status = response.status;
       throw notFoundError;
     }
-    const requestError = new Error(detail || `Request failed (${response.status}). Check the submitted values and try again.`);
+    const requestError = new Error(detail || (response.status === 409
+      ? "This email address or mobile number is already registered. Sign in, or use a different email and mobile number."
+      : `Request failed (${response.status}). Check the submitted values and try again.`));
     requestError.status = response.status;
     throw requestError;
   }
@@ -142,7 +144,11 @@ async function publicRequest(path, body) {
     } catch {
       detail = "";
     }
-    throw new Error(detail || `Request failed (${response.status}).`);
+    const requestError = new Error(detail || (response.status === 409
+      ? "This email address or mobile number is already registered. Sign in, or use a different email and mobile number."
+      : `Request failed (${response.status}).`));
+    requestError.status = response.status;
+    throw requestError;
   }
   return response.status === 204 || response.status === 202 || response.status === 201
     ? null
@@ -200,6 +206,15 @@ function App() {
     confirmPassword: ""
   });
   const [generatedRecoveryId, setGeneratedRecoveryId] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileEditForm, setProfileEditForm] = useState({
+    ownerName: "",
+    mobileNumber: "",
+    pgName: "",
+    propertyType: "",
+    locality: "",
+    city: ""
+  });
   const [adminCredentials, setAdminCredentials] = useState(
     savedSession?.type === "admin" ? savedSession.credentials : null
   );
@@ -220,7 +235,6 @@ function App() {
   });
   const [registrationSuccessPgName, setRegistrationSuccessPgName] = useState("");
   const [registrationCredentials, setRegistrationCredentials] = useState(null);
-  const [registrationApproved, setRegistrationApproved] = useState(false);
   const [profileForm, setProfileForm] = useState({
     username: "",
     pgName: "",
@@ -495,7 +509,7 @@ function App() {
   }, [credentials, monthlyPaymentsOpen, selectedPaymentPeriod]);
 
   useEffect(() => {
-    if (authMode !== "REGISTRATION_SUCCESS" || !registrationCredentials || registrationApproved) return undefined;
+    if (authMode !== "REGISTRATION_SUCCESS" || !registrationCredentials) return undefined;
 
     let stopped = false;
     let timeoutId;
@@ -509,9 +523,13 @@ function App() {
         });
         if (stopped) return;
         if (response.ok) {
-          setRegistrationApproved(true);
+          setAuthMode("LOGIN");
           setError("");
-          setLoginForm({ username: registrationCredentials.username, password: "" });
+          setLoginForm({
+            username: registrationCredentials.username,
+            password: registrationCredentials.password
+          });
+          setNotice("Your registration is approved. You can now sign in.");
           setRegistrationCredentials(null);
           return;
         }
@@ -523,7 +541,7 @@ function App() {
       } catch {
         if (!stopped) setError("Could not check approval status. Check your connection; we’ll try again shortly.");
       }
-      if (!stopped) timeoutId = window.setTimeout(checkApproval, 5000);
+      if (!stopped) timeoutId = window.setTimeout(checkApproval, 4000);
     };
 
     checkApproval();
@@ -531,7 +549,7 @@ function App() {
       stopped = true;
       window.clearTimeout(timeoutId);
     };
-  }, [authMode, registrationCredentials, registrationApproved]);
+  }, [authMode, registrationCredentials]);
 
   async function loadResidents(owner, page = residentPageIndex, keyword = searchText, status = selectedStatus) {
     const params = new URLSearchParams({
@@ -600,6 +618,54 @@ function App() {
     }
   }
 
+  function openOwnerProfile() {
+    setProfileEditForm({
+      ownerName: profileForm.ownerName || "",
+      mobileNumber: profileForm.mobileNumber?.replace(/^\+91/, "") || "",
+      pgName: profileForm.pgName || "",
+      propertyType: profileForm.propertyType || "",
+      locality: profileForm.locality || "",
+      city: profileForm.city || ""
+    });
+    setProfileOpen(true);
+    setError("");
+    setNotice("");
+  }
+
+  async function handleProfileUpdate(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const profile = await request(
+        "/api/owner/profile",
+        credentials,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            ...profileEditForm,
+            ownerName: profileEditForm.ownerName.trim(),
+            mobileNumber: profileEditForm.mobileNumber,
+            pgName: profileEditForm.pgName.trim(),
+            locality: profileEditForm.locality.trim(),
+            city: profileEditForm.city.trim()
+          })
+        }
+      );
+      setProfileForm({
+        ...profile,
+        mobileNumber: profile.mobileNumber?.replace(/^\+91/, "") || ""
+      });
+      setProfileOpen(false);
+      setNotice("Your profile has been updated.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handlePasswordReset(event) {
     event.preventDefault();
     if (recoveryForm.newPassword.length < 12) {
@@ -654,9 +720,8 @@ function App() {
         city: setupForm.city.trim(),
         password: setupForm.password
       });
-      setRegistrationSuccessPgName(normalizedEmail);
+      setRegistrationSuccessPgName(setupForm.ownerName.trim());
       setRegistrationCredentials({ username: normalizedEmail, password: setupForm.password });
-      setRegistrationApproved(false);
       setSetupForm({
         ownerName: "",
         mobileNumber: "",
@@ -900,16 +965,6 @@ function App() {
     setEmptyBedsOpen(false);
     setMonthlyPaymentsOpen((open) => !open);
     setSearchText("");
-    setError("");
-    setNotice("");
-  }
-
-  function goToDashboardHome() {
-    setEmptyBedsOpen(false);
-    setMonthlyPaymentsOpen(false);
-    setSelectedStatus("ACTIVE");
-    setSearchText("");
-    setResidentPageIndex(0);
     setError("");
     setNotice("");
   }
@@ -1267,7 +1322,7 @@ function App() {
                                 <span className={`owner-status ${status === "PENDING" ? "owner-status-pending" : "owner-status-approved"}`}>{status === "PENDING" ? "Pending" : "Approved"}</span>
                               </div>
                               <div className="admin-owner-details">
-                                              {owner.ownerName && <span><small>OWNER</small>{owner.ownerName}</span>}
+                                              {owner.ownerName && <span><small>USERNAME</small>{owner.ownerName}</span>}
                                               <span><small>EMAIL</small>{owner.username}</span>
                                               <span><small>MOBILE NUMBER</small>{owner.mobileNumber || "Not provided"}</span>
                                               {owner.propertyType && <span><small>OCCUPANCY</small>{owner.propertyType === "CO_LIVING" ? "Co-living" : owner.propertyType === "BOYS" ? "Boys" : "Girls"}</span>}
@@ -1325,9 +1380,9 @@ function App() {
             <p className="eyebrow">MADE FOR EVERYDAY PG WORK</p>
             <h2 id="landing-features-title">The essentials, all together</h2>
             <div className="landing-feature-grid">
-              <article><span>01</span><h3>Resident management</h3><p>Keep resident details, joining status, and important documents organised.</p></article>
-              <article><span>02</span><h3>Rooms and bed availability</h3><p>Set room sharing and see how many beds are available before assigning residents.</p></article>
-              <article><span>03</span><h3>Monthly rent tracking</h3><p>Check outstanding rent by month and record payments for each month separately.</p></article>
+              <article><img src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=720&q=80" alt="Team working together" loading="lazy" /><span>01</span><h3>Resident management</h3><p>Keep resident details, joining status, and important documents organised.</p></article>
+              <article><img src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=720&q=80" alt="Bright shared living space" loading="lazy" /><span>02</span><h3>Rooms and bed availability</h3><p>Set room sharing and see how many beds are available before assigning residents.</p></article>
+              <article><img src="https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=720&q=80" alt="Organised payment records" loading="lazy" /><span>03</span><h3>Monthly rent tracking</h3><p>Check outstanding rent by month and record payments for each month separately.</p></article>
             </div>
           </section>
           <footer className="landing-footer">Haven · A clearer way to manage your PG</footer>
@@ -1375,20 +1430,18 @@ function App() {
             <span>haven<span className="brand-period">.</span></span>
           </a>
           <div className="pgcaptain-auth-intro">
-            <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "CREATE ACCOUNT" : authMode === "FORGOT_PASSWORD" ? "ACCOUNT RECOVERY" : "OWNER PORTAL"}</p>
-            <h1>{authMode === "REGISTRATION_SUCCESS" ? registrationApproved ? "Admin approved." : "Registration received." : authMode === "SETUP" ? "Create your account" : authMode === "ADMIN_LOGIN" ? "Admin sign in" : authMode === "FORGOT_PASSWORD" ? "Reset your password" : "Sign in to Haven"}</h1>
+            <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "CREATE ACCOUNT" : authMode === "FORGOT_PASSWORD" ? "ACCOUNT RECOVERY" : authMode === "REGISTRATION_SUCCESS" ? "REGISTRATION STATUS" : "OWNER PORTAL"}</p>
+            <h1>{authMode === "REGISTRATION_SUCCESS" ? "Awaiting approval" : authMode === "SETUP" ? "Create your account" : authMode === "ADMIN_LOGIN" ? "Admin sign in" : authMode === "FORGOT_PASSWORD" ? "Reset your password" : "Sign in to Haven"}</h1>
             {authMode === "LOGIN" && <p className="muted">Owners, managers and front-desk staff.</p>}
             {authMode === "SETUP" && <p className="muted">Add your details and property information to request owner access.</p>}
             {authMode === "FORGOT_PASSWORD" && <p className="muted">Ask the administrator for a recovery ID, then enter it below with your new password.</p>}
           </div>
-          {authMode === "REGISTRATION_SUCCESS" && <p className="muted">{registrationApproved ? `${registrationSuccessPgName} is approved. You can now log in.` : `Thank you for registering ${registrationSuccessPgName}. Please wait for administrator approval.`}</p>}
-          {authMode === "REGISTRATION_SUCCESS" && !registrationApproved && <div className="alert alert-success" role="status">Waiting for an administrator to approve your registration. This page will update when approved.</div>}
-          {authMode === "REGISTRATION_SUCCESS" && registrationApproved && <button type="button" className="button button-primary button-wide" onClick={() => {
-            setAuthMode("LOGIN");
-            setRegistrationApproved(false);
-            setError("");
-            setNotice("");
-          }}>Go to sign in</button>}
+          {authMode === "REGISTRATION_SUCCESS" && <div className="approval-wait-card" role="status">
+            <span className="approval-wait-icon">✓</span>
+            <strong>Submission received</strong>
+            <p>Your owner registration for <b>{registrationSuccessPgName}</b> is waiting for administrator approval.</p>
+            <small>This page will take you to sign in as soon as your account is approved.</small>
+          </div>}
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
           {authMode === "LOGIN" && <>
@@ -1424,7 +1477,7 @@ function App() {
           </div>}
           {authMode === "SETUP" && <form className="stack-form pgcaptain-form-surface auth-registration-form" onSubmit={handleSetupOwner}>
             <div className="auth-registration-grid">
-              <label>Owner name<input autoComplete="name" maxLength="100" placeholder="Your full name" required value={setupForm.ownerName} onChange={(event) => setSetupForm({ ...setupForm, ownerName: event.target.value })} /></label>
+              <label>Username<input autoComplete="name" maxLength="100" placeholder="Your name" required value={setupForm.ownerName} onChange={(event) => setSetupForm({ ...setupForm, ownerName: event.target.value })} /></label>
               <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="98765 43210" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
               <label>Email<input type="email" autoComplete="email" placeholder="you@example.com" maxLength="100" required value={setupForm.email} onChange={(event) => setSetupForm({ ...setupForm, email: event.target.value })} /></label>
               <label>Property name<input autoComplete="organization" maxLength="100" placeholder="Your PG or co-living name" required value={setupForm.pgName} onChange={(event) => setSetupForm({ ...setupForm, pgName: event.target.value })} /></label>
@@ -1449,7 +1502,7 @@ function App() {
                 {setupForm.confirmPassword && setupForm.password !== setupForm.confirmPassword && <span className="field-help field-help-error" role="status">Passwords do not match.</span>}
               </label>
             </div>
-            <button className="button button-primary button-wide" disabled={loading}>{loading ? "Creating account…" : "Create owner account"}</button>
+            <button className="button button-primary button-wide" disabled={loading}>{loading ? "Submitting…" : "Submit"}</button>
             <p className="auth-registration-note">Your account will be ready to sign in after administrator approval.</p>
           </form>}
           <button type="button" className="text-action auth-back-button" onClick={() => { setAuthMode("LANDING"); setError(""); setNotice(""); }}>← Back</button>
@@ -1471,26 +1524,24 @@ function App() {
     : null;
   const currentPaymentPeriod = getCurrentPaymentPeriod();
   const ownerWorkspaceOpen = !monthlyPaymentsOpen && !emptyBedsOpen;
-  const homePageActive = ownerWorkspaceOpen;
+  const occupancyPercent = dashboardSummary?.totalBeds
+    ? Math.min(100, Math.max(0, Math.round((dashboardSummary.occupiedBeds / dashboardSummary.totalBeds) * 100)))
+    : 0;
+  const rentTotal = (dashboardSummary?.monthlyRentCollection || 0) + (dashboardSummary?.pendingRentAmount || 0);
+  const rentCollectionPercent = rentTotal > 0
+    ? Math.round((dashboardSummary.monthlyRentCollection / rentTotal) * 100)
+    : 0;
 
   return (
     <main className="dashboard">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
-          event.preventDefault();
-          goToDashboardHome();
-        }}>
+        <div className="brand" aria-label="Haven">
           <span className="brand-mark">H</span>
           <span>haven<span className="brand-period">.</span></span>
-        </a>
+        </div>
         <div className="topbar-right">
           <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
-          <button
-            className="button button-primary"
-            type="button"
-            aria-current={homePageActive ? "page" : undefined}
-            onClick={goToDashboardHome}
-          >Home</button>
+          <button className="button button-light" type="button" onClick={openOwnerProfile}>My profile</button>
           <button className="button button-primary" onClick={logout}>Sign out</button>
         </div>
       </header>
@@ -1554,6 +1605,39 @@ function App() {
           <article className="stat-card stat-card-static">
             <span className="stat-icon icon-active">₹</span>
             <div><p className="stat-label">Collection for {currentMonthName}</p><strong>{formatCurrency(dashboardSummary.monthlyRentCollection)}</strong></div>
+          </article>
+        </section>}
+
+        {ownerWorkspaceOpen && dashboardSummary && <section className="dashboard-insights" aria-label="Property insights">
+          <article className="insight-card occupancy-insight">
+            <div className="insight-heading">
+              <div><p className="eyebrow">CAPACITY</p><h2>Bed occupancy</h2></div>
+              <span className="insight-period">Current</span>
+            </div>
+            <div className="occupancy-chart-row">
+              <div className="occupancy-chart" role="img" aria-label={`${occupancyPercent}% of beds occupied`} style={{ "--occupancy": `${occupancyPercent}%` }}>
+                <div><strong>{occupancyPercent}%</strong><span>occupied</span></div>
+              </div>
+              <div className="chart-legend">
+                <span><i className="legend-occupied" />Occupied beds <b>{dashboardSummary.occupiedBeds}</b></span>
+                <span><i className="legend-vacant" />Available beds <b>{dashboardSummary.availableBeds}</b></span>
+                <span><i className="legend-capacity" />Total capacity <b>{dashboardSummary.totalBeds}</b></span>
+              </div>
+            </div>
+          </article>
+          <article className="insight-card rent-insight">
+            <div className="insight-heading">
+              <div><p className="eyebrow">RENT PERFORMANCE</p><h2>{currentMonthName} collection</h2></div>
+              <span className="insight-period">{rentCollectionPercent}%</span>
+            </div>
+            <div className="rent-chart-total">{formatCurrency(rentTotal)}<small> expected this month</small></div>
+            <div className="rent-progress-track" role="img" aria-label={`${rentCollectionPercent}% rent collected`}>
+              <span style={{ width: `${rentCollectionPercent}%` }} />
+            </div>
+            <div className="rent-chart-legend">
+              <span><i className="legend-occupied" />Collected <b>{formatCurrency(dashboardSummary.monthlyRentCollection)}</b></span>
+              <span><i className="legend-pending" />Pending <b>{formatCurrency(dashboardSummary.pendingRentAmount)}</b></span>
+            </div>
           </article>
         </section>}
 
@@ -2103,6 +2187,45 @@ function App() {
                     )}
                   </div>
                   : <div className="document-message muted" role="status">Opening document…</div>}
+            </section>
+          </div>
+        )}
+
+        {profileOpen && (
+          <div className="dialog-backdrop" onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !loading) setProfileOpen(false);
+          }}>
+            <section className="resident-dialog profile-dialog" role="dialog" aria-modal="true" aria-labelledby="owner-profile-title">
+              <div className="resident-dialog-heading">
+                <p className="eyebrow">ACCOUNT DETAILS</p>
+                <h2 id="owner-profile-title">My profile</h2>
+                <p className="muted">Update your contact and property information.</p>
+                <button className="icon-button profile-close" type="button" disabled={loading} onClick={() => setProfileOpen(false)} aria-label="Close profile">×</button>
+              </div>
+              <form className="resident-form profile-form" onSubmit={handleProfileUpdate}>
+                <div className="profile-summary">
+                  <span className="profile-avatar">{(profileForm.ownerName || profileForm.pgName || "O").trim().charAt(0).toUpperCase()}</span>
+                  <div><strong>{profileForm.ownerName || profileForm.pgName}</strong><span>{profileForm.username}</span></div>
+                </div>
+                <div className="auth-registration-grid">
+                  <label>Username<input autoComplete="name" maxLength="100" required value={profileEditForm.ownerName} onChange={(event) => setProfileEditForm({ ...profileEditForm, ownerName: event.target.value })} /></label>
+                  <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" autoComplete="tel-national" maxLength="10" pattern="[6-9][0-9]{9}" required value={profileEditForm.mobileNumber} onChange={(event) => setProfileEditForm({ ...profileEditForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
+                  <label>Property name<input maxLength="100" required value={profileEditForm.pgName} onChange={(event) => setProfileEditForm({ ...profileEditForm, pgName: event.target.value })} /></label>
+                  <label>Occupancy type<select required value={profileEditForm.propertyType} onChange={(event) => setProfileEditForm({ ...profileEditForm, propertyType: event.target.value })}>
+                    <option value="" disabled>Select occupancy type</option>
+                    <option value="CO_LIVING">Co-living</option>
+                    <option value="BOYS">Boys</option>
+                    <option value="GIRLS">Girls</option>
+                  </select></label>
+                  <label>Locality<input maxLength="100" required value={profileEditForm.locality} onChange={(event) => setProfileEditForm({ ...profileEditForm, locality: event.target.value })} /></label>
+                  <label>City<input maxLength="100" required value={profileEditForm.city} onChange={(event) => setProfileEditForm({ ...profileEditForm, city: event.target.value })} /></label>
+                </div>
+                <p className="profile-email-note">Sign-in email: <strong>{profileForm.username}</strong></p>
+                <div className="form-footer-actions">
+                  <button type="button" className="button button-light" disabled={loading} onClick={() => setProfileOpen(false)}>Cancel</button>
+                  <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving profile…" : "Save profile"}</button>
+                </div>
+              </form>
             </section>
           </div>
         )}

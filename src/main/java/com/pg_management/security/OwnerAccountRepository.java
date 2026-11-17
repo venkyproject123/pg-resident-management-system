@@ -17,6 +17,8 @@ public interface OwnerAccountRepository extends JpaRepository<OwnerAccount, Long
 
 	boolean existsByMobileNumber(String mobileNumber);
 
+	boolean existsByMobileNumberAndIdNot(String mobileNumber, Long id);
+
 	boolean existsByRecoveryIdHash(String recoveryIdHash);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)

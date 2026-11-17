@@ -167,6 +167,10 @@ public class OwnerAccount {
 		this.passwordHash = passwordHash;
 	}
 
+	public void setPgName(String pgName) {
+		this.pgName = pgName;
+	}
+
 	public String getRecoveryIdHash() {
 		return recoveryIdHash;
 	}

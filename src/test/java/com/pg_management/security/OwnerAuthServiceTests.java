@@ -114,6 +114,51 @@ class OwnerAuthServiceTests {
 	}
 
 	@Test
+	void ownerCanUpdateTheirProfileAndMobileNumber() {
+		OwnerAccount owner = new OwnerAccount("owner@example.com", "hash", "Old PG", "+919876543210", true);
+		when(ownerAccountRepository.findByUsername("owner@example.com")).thenReturn(Optional.of(owner));
+		when(ownerAccountRepository.existsByMobileNumberAndIdNot("+919123456789", owner.getId())).thenReturn(false);
+		when(ownerAccountRepository.save(owner)).thenReturn(owner);
+
+		OwnerAuthService.OwnerProfile profile = ownerAuthService.updateProfile(
+				"owner@example.com",
+				"New Username",
+				"9123456789",
+				"New PG",
+				"GIRLS",
+				"Banjara Hills",
+				"Hyderabad");
+
+		assertEquals("New Username", profile.ownerName());
+		assertEquals("New PG", profile.pgName());
+		assertEquals("+919123456789", profile.mobileNumber());
+		assertEquals("GIRLS", profile.propertyType());
+		assertEquals("Banjara Hills", profile.locality());
+		assertEquals("Hyderabad", profile.city());
+		verify(ownerAccountRepository).save(owner);
+	}
+
+	@Test
+	void ownerCannotChangeProfileToAnotherOwnersMobileNumber() {
+		OwnerAccount owner = new OwnerAccount("owner@example.com", "hash", "Old PG", "+919876543210", true);
+		when(ownerAccountRepository.findByUsername("owner@example.com")).thenReturn(Optional.of(owner));
+		when(ownerAccountRepository.existsByMobileNumberAndIdNot("+919123456789", owner.getId())).thenReturn(true);
+
+		var exception = org.junit.jupiter.api.Assertions.assertThrows(
+				org.springframework.web.server.ResponseStatusException.class,
+				() -> ownerAuthService.updateProfile(
+						"owner@example.com",
+						"Owner Name",
+						"9123456789",
+						"Sample PG",
+						"BOYS",
+						"Area",
+						"City"));
+
+		assertTrue(exception.getReason().contains("already used"));
+	}
+
+	@Test
 	void firstApprovedOwnerClaimsExistingUnassignedResidents() {
 		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210", false);
 		when(ownerAccountRepository.findById(7L)).thenReturn(Optional.of(owner));

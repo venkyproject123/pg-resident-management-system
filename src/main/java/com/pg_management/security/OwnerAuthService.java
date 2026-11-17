@@ -62,14 +62,16 @@ public class OwnerAuthService {
 			boolean emailExists = ownerAccountRepository.existsByUsername(normalizedEmail);
 			emailLookupMs = elapsedMs(stageStartedAt);
 			if (emailExists) {
-				throw new ResponseStatusException(HttpStatus.CONFLICT, "That email is already registered");
+				throw new ResponseStatusException(
+						HttpStatus.CONFLICT, "This email address is already registered. Sign in or use another email.");
 			}
 			String normalizedMobileNumber = normalizeMobileNumber(mobileNumber);
 			stageStartedAt = System.nanoTime();
 			boolean mobileNumberExists = ownerAccountRepository.existsByMobileNumber(normalizedMobileNumber);
 			mobileLookupMs = elapsedMs(stageStartedAt);
 			if (mobileNumberExists) {
-				throw new ResponseStatusException(HttpStatus.CONFLICT, "That mobile number is already registered");
+				throw new ResponseStatusException(
+						HttpStatus.CONFLICT, "This mobile number is already registered. Use another number.");
 			}
 			stageStartedAt = System.nanoTime();
 			String passwordHash = passwordEncoder.encode(password);
@@ -162,6 +164,36 @@ public class OwnerAuthService {
 				owner.getPropertyType(),
 				owner.getLocality(),
 				owner.getCity());
+	}
+
+	public OwnerProfile updateProfile(
+			String username,
+			String ownerName,
+			String mobileNumber,
+			String pgName,
+			String propertyType,
+			String locality,
+			String city) {
+		OwnerAccount owner = ownerAccountRepository.findByUsername(username)
+				.filter(account -> !account.isRemoved())
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
+		String normalizedMobileNumber = normalizeMobileNumber(mobileNumber);
+		if (ownerAccountRepository.existsByMobileNumberAndIdNot(normalizedMobileNumber, owner.getId())) {
+			throw new ResponseStatusException(
+					HttpStatus.CONFLICT, "This mobile number is already used by another owner.");
+		}
+		String normalizedLocality = locality.trim();
+		String normalizedCity = city.trim();
+		owner.setRegistrationDetails(
+				ownerName.trim(),
+				propertyType.trim().toUpperCase(),
+				normalizedLocality,
+				normalizedCity,
+				normalizedLocality + ", " + normalizedCity,
+				normalizedMobileNumber);
+		owner.setPgName(pgName.trim());
+		ownerAccountRepository.save(owner);
+		return getProfile(username);
 	}
 
 	public record OwnerProfile(

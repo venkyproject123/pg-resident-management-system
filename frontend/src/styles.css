@@ -73,7 +73,9 @@ a { color: inherit; text-decoration: none; }
 .landing-features > .eyebrow { color: var(--green); }
 .landing-features h2 { margin: 0 0 30px; color: #293d31; font-size: 30px; letter-spacing: -.8px; }
 .landing-feature-grid { display: grid; max-width: 1120px; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: auto; text-align: left; }
-.landing-feature-grid article { padding: 22px; border: 1px solid #e9eee8; border-radius: 14px; background: #fcfdfb; }
+.landing-feature-grid article { overflow: hidden; padding: 0 22px 22px; border: 1px solid #e9eee8; border-radius: 14px; background: #fcfdfb; }
+.landing-feature-grid article > img { display: block; width: calc(100% + 44px); height: 150px; margin: 0 -22px 19px; object-fit: cover; }
+.landing-feature-grid article > span, .landing-feature-grid h3, .landing-feature-grid p { margin-right: 0; margin-left: 0; }
 .landing-feature-grid article > span { color: #57906b; font-size: 12px; font-weight: 800; letter-spacing: 1px; }
 .landing-feature-grid h3 { margin: 15px 0 8px; color: #34483a; font-size: 17px; }
 .landing-feature-grid p { margin: 0; color: #77847a; font-size: 13px; line-height: 1.6; }
@@ -779,6 +781,87 @@ td { font-size: 13px; }
   letter-spacing: 1.2px;
 }
 .admin-recovery-id .button { min-height: 38px; }
+.approval-wait-card {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  margin: 8px 0 20px;
+  padding: 25px 20px;
+  border: 1px solid #dcebe1;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f8fcf8, #f1f8f3);
+  text-align: center;
+}
+.approval-wait-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e2f2e7;
+  color: #26734b;
+  font-size: 19px;
+  font-weight: 800;
+}
+.approval-wait-card > strong { color: #284835; font-size: 15px; }
+.approval-wait-card p { margin: 0; color: #637269; font-size: 12px; line-height: 1.55; }
+.approval-wait-card small { color: #829087; font-size: 10px; line-height: 1.5; }
+.dashboard-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: -4px 0 22px;
+}
+.insight-card {
+  min-width: 0;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.insight-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.insight-heading .eyebrow { margin-bottom: 5px; color: #72917d; font-size: 9px; }
+.insight-heading h2 { margin: 0; color: #24382c; font-size: 16px; letter-spacing: -.3px; }
+.insight-period { padding: 5px 9px; border-radius: 20px; background: #eff6f1; color: #326b4b; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.occupancy-chart-row { display: flex; align-items: center; gap: clamp(18px, 4vw, 48px); padding: 22px 4px 6px; }
+.occupancy-chart {
+  display: grid;
+  flex: 0 0 136px;
+  width: 136px;
+  height: 136px;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(#2c8055 var(--occupancy), #eaf0eb var(--occupancy));
+}
+.occupancy-chart > div { display: grid; width: 100px; height: 100px; align-content: center; justify-items: center; gap: 2px; border-radius: 50%; background: #fff; }
+.occupancy-chart strong { color: #234b34; font-size: 24px; letter-spacing: -1px; }
+.occupancy-chart span { color: #829087; font-size: 10px; }
+.chart-legend { display: grid; flex: 1; gap: 12px; min-width: 0; }
+.chart-legend > span, .rent-chart-legend > span { display: flex; align-items: center; gap: 8px; color: #64736a; font-size: 11px; }
+.chart-legend b, .rent-chart-legend b { margin-left: auto; color: #2f4035; font-size: 11px; white-space: nowrap; }
+.chart-legend i, .rent-chart-legend i { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
+.legend-occupied { background: #2c8055; }
+.legend-vacant, .legend-capacity { background: #dce8df; }
+.legend-pending { background: #eab969; }
+.rent-chart-total { margin: 28px 0 15px; color: #243c2d; font-size: 28px; font-weight: 750; letter-spacing: -1px; }
+.rent-chart-total small { display: block; margin-top: 3px; color: #87938a; font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.rent-progress-track { height: 10px; overflow: hidden; border-radius: 8px; background: #edf2ee; }
+.rent-progress-track span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: linear-gradient(90deg, #2d8056, #72b889); transition: width .4s ease; }
+.rent-chart-legend { display: grid; gap: 12px; margin-top: 17px; }
+.profile-dialog { width: min(680px, 100%); }
+.profile-dialog .resident-dialog-heading { position: relative; }
+.profile-dialog .resident-dialog-heading h2 { margin: 0; color: #23392c; }
+.profile-close { position: absolute; top: 20px; right: 22px; }
+.profile-form { gap: 20px; }
+.profile-summary { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #e6eee8; border-radius: 10px; background: #fff; }
+.profile-avatar { display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; background: #e8f3ec; color: #286d49; font-size: 16px; font-weight: 750; }
+.profile-summary > div { display: grid; gap: 3px; min-width: 0; }
+.profile-summary strong { overflow: hidden; color: #304337; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-summary span:not(.profile-avatar) { overflow: hidden; color: #7a887f; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-email-note { margin: -6px 0 0; color: #78877e; font-size: 11px; }
+.profile-email-note strong { color: #44594c; }
+.profile-form .auth-registration-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
 @media (max-width: 900px) {
   .pgcaptain-auth-shell,
   .registration-auth-shell {
@@ -1074,4 +1157,28 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
   .landing-hero { gap: 30px; padding-top: 48px; }
   .login-card { padding: 26px 21px; }
   .resident-drawer { width: 100%; }
+}
+
+@media (max-width: 900px) {
+  .dashboard-insights { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 540px) {
+  .landing-feature-grid article { padding: 0 16px 18px; }
+  .landing-feature-grid article > img { width: calc(100% + 32px); height: 145px; margin: 0 -16px 16px; }
+  .dashboard-insights { gap: 11px; margin-bottom: 16px; }
+  .insight-card { padding: 16px; }
+  .occupancy-chart-row { gap: 15px; padding-top: 18px; }
+  .occupancy-chart { flex-basis: 110px; width: 110px; height: 110px; }
+  .occupancy-chart > div { width: 80px; height: 80px; }
+  .occupancy-chart strong { font-size: 20px; }
+  .chart-legend { gap: 9px; }
+  .chart-legend > span, .rent-chart-legend > span { gap: 6px; font-size: 10px; }
+  .chart-legend b, .rent-chart-legend b { font-size: 10px; }
+  .rent-chart-total { margin-top: 22px; font-size: 25px; }
+  .profile-form .auth-registration-grid { grid-template-columns: minmax(0, 1fr); }
+  .profile-dialog .resident-dialog-heading { padding-right: 58px; }
+  .profile-close { top: 14px; right: 14px; }
+  .profile-form { gap: 16px; }
+  .profile-form .form-footer-actions { flex-direction: column-reverse; }
+  .profile-form .form-footer-actions .button { width: 100%; }
 }

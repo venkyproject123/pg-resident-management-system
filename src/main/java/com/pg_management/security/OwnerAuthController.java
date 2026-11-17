@@ -5,6 +5,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,6 +49,20 @@ public class OwnerAuthController {
 		return ownerAuthService.getProfile(authentication.getName());
 	}
 
+	@PutMapping("/profile")
+	public OwnerAuthService.OwnerProfile updateProfile(
+			Authentication authentication,
+			@Valid @RequestBody ProfileUpdateRequest request) {
+		return ownerAuthService.updateProfile(
+				authentication.getName(),
+				request.ownerName(),
+				request.mobileNumber(),
+				request.pgName(),
+				request.propertyType(),
+				request.locality(),
+				request.city());
+	}
+
 	public record SetupStatus(boolean setupRequired) {
 	}
 
@@ -64,6 +79,19 @@ public class OwnerAuthController {
 			@NotBlank @Size(max = 100) String locality,
 			@NotBlank @Size(max = 100) String city,
 			@NotBlank @Size(min = 12, max = 128) String password) {
+	}
+
+	public record ProfileUpdateRequest(
+			@NotBlank @Size(max = 100) String ownerName,
+			@NotBlank @jakarta.validation.constraints.Pattern(
+					regexp = "^[6-9][0-9]{9}$", message = "must be a 10-digit Indian mobile number")
+			String mobileNumber,
+			@NotBlank @Size(max = 100) String pgName,
+			@NotBlank @jakarta.validation.constraints.Pattern(
+					regexp = "^(?i:CO_LIVING|BOYS|GIRLS)$", message = "must be co-living, boys, or girls")
+			String propertyType,
+			@NotBlank @Size(max = 100) String locality,
+			@NotBlank @Size(max = 100) String city) {
 	}
 
 }
