@@ -218,7 +218,13 @@ function App() {
   const [adminCredentials, setAdminCredentials] = useState(
     savedSession?.type === "admin" ? savedSession.credentials : null
   );
-  const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
+  const [adminLoginForm, setAdminLoginForm] = useState({ email: "", password: "" });
+  const [adminRecoveryForm, setAdminRecoveryForm] = useState({
+    email: "",
+    recoveryId: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
   const [pendingOwners, setPendingOwners] = useState([]);
   const [approvedOwners, setApprovedOwners] = useState([]);
   const [authMode, setAuthMode] = useState("LANDING");
@@ -356,6 +362,37 @@ function App() {
     window.addEventListener("popstate", keepDashboardOpen);
     return () => window.removeEventListener("popstate", keepDashboardOpen);
   }, [credentials]);
+
+  useEffect(() => {
+    if (credentials || adminCredentials) return undefined;
+
+    const currentState = window.history.state || {};
+    if (!currentState.havenAuthRoot) {
+      window.history.replaceState(
+        { ...currentState, havenAuthRoot: true, havenAuthMode: "LANDING" },
+        "",
+        window.location.href
+      );
+    }
+
+    const restoreAuthMode = (event) => {
+      setAuthMode(event.state?.havenAuthMode || "LANDING");
+      setError("");
+      setNotice("");
+    };
+    window.addEventListener("popstate", restoreAuthMode);
+    return () => window.removeEventListener("popstate", restoreAuthMode);
+  }, [credentials, adminCredentials]);
+
+  useEffect(() => {
+    if (credentials || adminCredentials || authMode === "LANDING") return;
+    if (window.history.state?.havenAuthMode === authMode) return;
+    window.history.pushState(
+      { ...(window.history.state || {}), havenAuthRoot: true, havenAuthMode: authMode },
+      "",
+      window.location.href
+    );
+  }, [authMode, credentials, adminCredentials]);
 
   useEffect(() => {
     if (!residentDetails) return undefined;
@@ -745,16 +782,67 @@ function App() {
     event.preventDefault();
     setLoading(true);
     setError("");
+    const adminCredentialsInput = {
+      username: adminLoginForm.email.trim().toLowerCase(),
+      password: adminLoginForm.password
+    };
     try {
       const overview = await request(
         "/api/admin/owners",
-        adminLoginForm,
+        adminCredentialsInput,
         {},
-        "Admin login failed. Check the admin username and password."
+        "Admin sign-in failed. Check the email and password."
       );
       setPendingOwners(overview.pending);
       setApprovedOwners(overview.approved);
-      setAdminCredentials(adminLoginForm);
+      setAdminCredentials(adminCredentialsInput);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAdminRecoveryRequest(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await publicRequest("/api/admin/password-recovery/request", {
+        email: adminRecoveryForm.email.trim().toLowerCase()
+      });
+      setNotice("If the email matches the admin account, a recovery ID was generated. Retrieve it from the protected backend logs.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAdminPasswordReset(event) {
+    event.preventDefault();
+    if (adminRecoveryForm.newPassword.length < 12) {
+      setError("Use a password with at least 12 characters.");
+      return;
+    }
+    if (adminRecoveryForm.newPassword !== adminRecoveryForm.confirmPassword) {
+      setError("The passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await publicRequest("/api/admin/password-recovery/reset", {
+        email: adminRecoveryForm.email.trim().toLowerCase(),
+        recoveryId: adminRecoveryForm.recoveryId,
+        newPassword: adminRecoveryForm.newPassword
+      });
+      setAdminLoginForm({ email: adminRecoveryForm.email.trim().toLowerCase(), password: "" });
+      setAdminRecoveryForm({ email: "", recoveryId: "", newPassword: "", confirmPassword: "" });
+      setAuthMode("ADMIN_LOGIN");
+      setNotice("Your admin password has been changed. Sign in with your new password.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -831,7 +919,7 @@ function App() {
 
   async function removeOwner(owner) {
     const confirmed = window.confirm(
-      `Remove ${owner.pgName} (${owner.username}) from Haven? They will no longer be able to sign in. Existing resident and payment records will be preserved.`
+      `Permanently delete ${owner.pgName} (${owner.username}) and all associated residents, rent payments, rooms, and documents? This cannot be undone.`
     );
     if (!confirmed) return;
 
@@ -847,7 +935,7 @@ function App() {
       );
       setPendingOwners((owners) => owners.filter((item) => item.id !== owner.id));
       setApprovedOwners((owners) => owners.filter((item) => item.id !== owner.id));
-      setNotice(`${owner.pgName} was removed. Existing resident and payment records were preserved.`);
+      setNotice(`${owner.pgName} and all associated data were permanently deleted.`);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1260,7 +1348,7 @@ function App() {
             <button type="button" className="button button-light" onClick={() => {
               sessionStorage.removeItem("haven-auth-session");
               setAdminCredentials(null);
-              setAdminLoginForm({ username: "", password: "" });
+              setAdminLoginForm({ email: "", password: "" });
               setPendingOwners([]);
               setApprovedOwners([]);
               setGeneratedRecoveryId(null);
@@ -1362,9 +1450,9 @@ function App() {
               <h1>Run your PG with <span>less paperwork.</span></h1>
               <p className="muted">Keep resident records, room availability, and month-by-month rent payments together in one clear, secure dashboard.</p>
               <div className="landing-hero-actions">
-                <button type="button" className="button button-primary" onClick={() => setAuthMode("SETUP")}>＋ Register your PG</button>
-                <button type="button" className="button button-primary" onClick={() => setAuthMode("LOGIN")}>Owner login</button>
-                <button type="button" className="button button-primary" onClick={() => setAuthMode("ADMIN_LOGIN")}>Admin login</button>
+                <button type="button" className="button button-primary" onClick={() => setAuthMode("SETUP")}>Set up your property</button>
+                <button type="button" className="button button-light" onClick={() => setAuthMode("LOGIN")}>Owner portal</button>
+                <button type="button" className="button button-light" onClick={() => setAuthMode("ADMIN_LOGIN")}>Admin portal</button>
               </div>
               <p className="landing-approval-note">New owner accounts require administrator approval.</p>
             </div>
@@ -1395,7 +1483,7 @@ function App() {
         <aside className="auth-showcase">
           <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
             event.preventDefault();
-            setAuthMode("LANDING");
+            window.history.back();
             setError("");
             setNotice("");
           }}>
@@ -1422,7 +1510,7 @@ function App() {
         <section className="login-card pgcaptain-auth-card">
           <a className="brand" href="/" aria-label="Haven home" onClick={(event) => {
             event.preventDefault();
-            setAuthMode("LANDING");
+            window.history.back();
             setError("");
             setNotice("");
           }}>
@@ -1430,11 +1518,12 @@ function App() {
             <span>haven<span className="brand-period">.</span></span>
           </a>
           <div className="pgcaptain-auth-intro">
-            <p className="eyebrow">{authMode === "ADMIN_LOGIN" ? "ADMIN PORTAL" : authMode === "SETUP" ? "CREATE ACCOUNT" : authMode === "FORGOT_PASSWORD" ? "ACCOUNT RECOVERY" : authMode === "REGISTRATION_SUCCESS" ? "REGISTRATION STATUS" : "OWNER PORTAL"}</p>
-            <h1>{authMode === "REGISTRATION_SUCCESS" ? "Awaiting approval" : authMode === "SETUP" ? "Create your account" : authMode === "ADMIN_LOGIN" ? "Admin sign in" : authMode === "FORGOT_PASSWORD" ? "Reset your password" : "Sign in to Haven"}</h1>
+            <p className="eyebrow">{authMode.startsWith("ADMIN_") ? "ADMIN PORTAL" : authMode === "SETUP" ? "CREATE ACCOUNT" : authMode === "FORGOT_PASSWORD" ? "ACCOUNT RECOVERY" : authMode === "REGISTRATION_SUCCESS" ? "REGISTRATION STATUS" : "OWNER PORTAL"}</p>
+            <h1>{authMode === "REGISTRATION_SUCCESS" ? "Awaiting approval" : authMode === "SETUP" ? "Create your account" : authMode === "ADMIN_LOGIN" ? "Admin sign in" : authMode === "FORGOT_PASSWORD" || authMode === "ADMIN_FORGOT_PASSWORD" ? "Reset your password" : "Sign in to Haven"}</h1>
             {authMode === "LOGIN" && <p className="muted">Owners, managers and front-desk staff.</p>}
             {authMode === "SETUP" && <p className="muted">Add your details and property information to request owner access.</p>}
             {authMode === "FORGOT_PASSWORD" && <p className="muted">Ask the administrator for a recovery ID, then enter it below with your new password.</p>}
+            {authMode === "ADMIN_FORGOT_PASSWORD" && <p className="muted">Generate a one-time ID, retrieve it from protected backend logs, and use it to set a new password.</p>}
           </div>
           {authMode === "REGISTRATION_SUCCESS" && <div className="approval-wait-card" role="status">
             <span className="approval-wait-icon">✓</span>
@@ -1468,12 +1557,30 @@ function App() {
               <button className="button button-primary button-wide" disabled={loading}>{loading ? "Changing password…" : "Change password"}</button>
             </form>
           </div>}
+          {authMode === "ADMIN_FORGOT_PASSWORD" && <div className="pgcaptain-form-surface">
+            <form className="stack-form" onSubmit={handleAdminRecoveryRequest}>
+              <label>Admin email<input type="email" autoComplete="email" required value={adminRecoveryForm.email} onChange={(event) => setAdminRecoveryForm({ ...adminRecoveryForm, email: event.target.value })} /></label>
+              <button className="button button-light button-wide" disabled={loading}>{loading ? "Generating recovery ID…" : "Generate recovery ID"}</button>
+            </form>
+            <form className="stack-form admin-reset-form" onSubmit={handleAdminPasswordReset}>
+              <label>Recovery ID<input autoComplete="one-time-code" maxLength="19" placeholder="XXXX-XXXX-XXXX-XXXX" required value={adminRecoveryForm.recoveryId} onChange={(event) => setAdminRecoveryForm({ ...adminRecoveryForm, recoveryId: event.target.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "").slice(0, 16) })} /></label>
+              <label>New password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" required value={adminRecoveryForm.newPassword} onChange={(event) => setAdminRecoveryForm({ ...adminRecoveryForm, newPassword: event.target.value })} /></label>
+              <label>Confirm new password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" required value={adminRecoveryForm.confirmPassword} onChange={(event) => setAdminRecoveryForm({ ...adminRecoveryForm, confirmPassword: event.target.value })} /></label>
+              <button className="button button-primary button-wide" disabled={loading}>{loading ? "Changing password…" : "Change admin password"}</button>
+            </form>
+          </div>}
           {authMode === "ADMIN_LOGIN" && <div className="pgcaptain-form-surface">
             <form className="stack-form" onSubmit={handleAdminLogin}>
-              <label>Admin username<input autoComplete="username" required value={adminLoginForm.username} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, username: event.target.value })} /></label>
-              <label>Admin password<SecretInput autoComplete="current-password" required value={adminLoginForm.password} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, password: event.target.value })} /></label>
-              <button className="button button-primary button-wide" disabled={loading}>{loading ? "Signing in…" : "Sign in as admin"}</button>
+              <label>Admin email<input type="email" autoComplete="username" required value={adminLoginForm.email} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, email: event.target.value })} /></label>
+              <label>Password<SecretInput autoComplete="current-password" required value={adminLoginForm.password} onChange={(event) => setAdminLoginForm({ ...adminLoginForm, password: event.target.value })} /></label>
+              <button className="button button-primary button-wide" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
             </form>
+            <p className="auth-forgot-link"><button type="button" onClick={() => {
+              setAdminRecoveryForm({ email: adminLoginForm.email, recoveryId: "", newPassword: "", confirmPassword: "" });
+              setError("");
+              setNotice("");
+              setAuthMode("ADMIN_FORGOT_PASSWORD");
+            }}>Forgot password?</button></p>
           </div>}
           {authMode === "SETUP" && <form className="stack-form pgcaptain-form-surface auth-registration-form" onSubmit={handleSetupOwner}>
             <div className="auth-registration-grid">
@@ -1505,7 +1612,7 @@ function App() {
             <button className="button button-primary button-wide" disabled={loading}>{loading ? "Submitting…" : "Submit"}</button>
             <p className="auth-registration-note">Your account will be ready to sign in after administrator approval.</p>
           </form>}
-          <button type="button" className="text-action auth-back-button" onClick={() => { setAuthMode("LANDING"); setError(""); setNotice(""); }}>← Back</button>
+          <button type="button" className="text-action auth-back-button" onClick={() => { window.history.back(); setError(""); setNotice(""); }}>← Back</button>
         </section>
       </main>
     );
@@ -1554,7 +1661,7 @@ function App() {
             <p className="muted">A clear view of the people who call your PG home.</p>
           </div>
           <div className="page-heading-actions">
-            <button className="button button-primary" onClick={startCreate}>＋ Add resident</button>
+            <button className="button button-primary" onClick={startCreate}>＋ New resident</button>
             <button className="button button-primary" type="button" aria-expanded={monthlyPaymentsOpen} aria-controls="monthly-payments" onClick={showMonthlyPayments}>
               {monthlyPaymentsOpen ? "Hide payments" : "Manage payments"}
             </button>

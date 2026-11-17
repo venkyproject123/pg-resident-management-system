@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,8 +47,8 @@ class OwnerAuthServiceTests {
 
 	@Test
 	void registrationCreatesAnUnapprovedOwnerWithoutOtp() {
-		when(ownerAccountRepository.existsByUsername("owner@example.com")).thenReturn(false);
-		when(ownerAccountRepository.existsByMobileNumber("+919876543210")).thenReturn(false);
+		when(ownerAccountRepository.findByUsername("owner@example.com")).thenReturn(Optional.empty());
+		when(ownerAccountRepository.findByMobileNumber("+919876543210")).thenReturn(Optional.empty());
 		when(ownerAccountRepository.saveAndFlush(any(OwnerAccount.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -95,8 +97,9 @@ class OwnerAuthServiceTests {
 
 	@Test
 	void registrationRejectsAnAlreadyRegisteredMobileNumber() {
-		when(ownerAccountRepository.existsByUsername("owner@example.com")).thenReturn(false);
-		when(ownerAccountRepository.existsByMobileNumber("+919876543210")).thenReturn(true);
+		OwnerAccount existingOwner = new OwnerAccount("another@example.com", "hash", "Another PG", "+919876543210", true);
+		when(ownerAccountRepository.findByUsername("owner@example.com")).thenReturn(Optional.empty());
+		when(ownerAccountRepository.findByMobileNumber("+919876543210")).thenReturn(Optional.of(existingOwner));
 
 		var exception = org.junit.jupiter.api.Assertions.assertThrows(
 				org.springframework.web.server.ResponseStatusException.class,
@@ -111,6 +114,34 @@ class OwnerAuthServiceTests {
 				"long-password-here"));
 
 		assertTrue(exception.getReason().contains("mobile number is already registered"));
+	}
+
+	@Test
+	void registrationPurgesPreviouslyRemovedOwnerAndMakesEmailAndMobileAvailable() {
+		OwnerAccount removedOwner = new OwnerAccount("owner@example.com", "hash", "Old PG", "+919876543210", true);
+		removedOwner.remove();
+		when(ownerAccountRepository.findByUsername("owner@example.com")).thenReturn(Optional.of(removedOwner));
+		when(ownerAccountRepository.findByMobileNumber("+919876543210")).thenReturn(Optional.empty());
+		when(ownerAccountRepository.saveAndFlush(any(OwnerAccount.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0));
+
+		ownerAuthService.registerOwner(
+				"Owner Name",
+				"9876543210",
+				"owner@example.com",
+				"New PG",
+				"BOYS",
+				"Madhapur",
+				"Hyderabad",
+				"long-password-here");
+
+		verify(jdbcTemplate).update(contains("DELETE payment"), eq(removedOwner.getId()));
+		verify(jdbcTemplate).update(contains("DELETE document"), eq(removedOwner.getId()));
+		verify(jdbcTemplate).update("DELETE FROM residents WHERE owner_id = ?", removedOwner.getId());
+		verify(jdbcTemplate).update("DELETE FROM owner_rooms WHERE owner_id = ?", removedOwner.getId());
+		verify(ownerAccountRepository).delete(removedOwner);
+		verify(ownerAccountRepository).flush();
+		verify(ownerAccountRepository).saveAndFlush(any(OwnerAccount.class));
 	}
 
 	@Test
@@ -201,16 +232,20 @@ class OwnerAuthServiceTests {
 	}
 
 	@Test
-	void removingOwnerDisablesLoginAndPreservesAccountRecord() {
+	void removingOwnerPermanentlyDeletesAccountAndOwnedData() {
 		OwnerAccount owner = new OwnerAccount("owner", "hash", "Sample PG", "+919876543210", true);
 		when(ownerAccountRepository.findById(7L)).thenReturn(Optional.of(owner));
 
 		ownerAuthService.removeOwner(7L);
 
-		assertTrue(owner.isRemoved());
-		assertFalse(owner.isApproved());
-		assertFalse(new OwnerPrincipal(owner).isEnabled());
-		verify(ownerAccountRepository).save(owner);
+		assertFalse(owner.isRemoved());
+		assertTrue(owner.isApproved());
+		verify(jdbcTemplate).update(contains("DELETE payment"), eq(owner.getId()));
+		verify(jdbcTemplate).update(contains("DELETE document"), eq(owner.getId()));
+		verify(jdbcTemplate).update("DELETE FROM residents WHERE owner_id = ?", owner.getId());
+		verify(jdbcTemplate).update("DELETE FROM owner_rooms WHERE owner_id = ?", owner.getId());
+		verify(ownerAccountRepository).delete(owner);
+		verify(ownerAccountRepository).flush();
 	}
 
 }

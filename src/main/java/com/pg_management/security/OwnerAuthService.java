@@ -21,17 +21,17 @@ public class OwnerAuthService {
 	private final OwnerAccountRepository ownerAccountRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JdbcTemplate jdbcTemplate;
-	private final String adminUsername;
+	private final String adminEmail;
 
 	public OwnerAuthService(
 			OwnerAccountRepository ownerAccountRepository,
 			PasswordEncoder passwordEncoder,
 			JdbcTemplate jdbcTemplate,
-			@Value("${app.admin.username:}") String adminUsername) {
+			@Value("${app.admin.email:}") String adminEmail) {
 		this.ownerAccountRepository = ownerAccountRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jdbcTemplate = jdbcTemplate;
-		this.adminUsername = adminUsername;
+		this.adminEmail = adminEmail.trim().toLowerCase(java.util.Locale.ROOT);
 	}
 
 	@Transactional(readOnly = true)
@@ -55,21 +55,25 @@ public class OwnerAuthService {
 		long databaseSaveMs = 0;
 		try {
 			String normalizedEmail = email.trim().toLowerCase();
-			if (!adminUsername.isBlank() && normalizedEmail.equalsIgnoreCase(adminUsername)) {
+			if (!adminEmail.isBlank() && normalizedEmail.equalsIgnoreCase(adminEmail)) {
 				throw new ResponseStatusException(HttpStatus.CONFLICT, "That email is reserved");
 			}
 			long stageStartedAt = System.nanoTime();
-			boolean emailExists = ownerAccountRepository.existsByUsername(normalizedEmail);
+			OwnerAccount emailOwner = ownerAccountRepository.findByUsername(normalizedEmail).orElse(null);
 			emailLookupMs = elapsedMs(stageStartedAt);
-			if (emailExists) {
+			if (emailOwner != null && emailOwner.isRemoved()) {
+				deleteOwnerData(emailOwner);
+			} else if (emailOwner != null) {
 				throw new ResponseStatusException(
 						HttpStatus.CONFLICT, "This email address is already registered. Sign in or use another email.");
 			}
 			String normalizedMobileNumber = normalizeMobileNumber(mobileNumber);
 			stageStartedAt = System.nanoTime();
-			boolean mobileNumberExists = ownerAccountRepository.existsByMobileNumber(normalizedMobileNumber);
+			OwnerAccount mobileOwner = ownerAccountRepository.findByMobileNumber(normalizedMobileNumber).orElse(null);
 			mobileLookupMs = elapsedMs(stageStartedAt);
-			if (mobileNumberExists) {
+			if (mobileOwner != null && mobileOwner.isRemoved()) {
+				deleteOwnerData(mobileOwner);
+			} else if (mobileOwner != null) {
 				throw new ResponseStatusException(
 						HttpStatus.CONFLICT, "This mobile number is already registered. Use another number.");
 			}
@@ -144,11 +148,29 @@ public class OwnerAuthService {
 	public void removeOwner(Long ownerId) {
 		OwnerAccount owner = ownerAccountRepository.findById(ownerId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found"));
-		if (owner.isRemoved()) {
-			throw new ResponseStatusException(HttpStatus.GONE, "This owner has already been removed");
-		}
-		owner.remove();
-		ownerAccountRepository.save(owner);
+		deleteOwnerData(owner);
+	}
+
+	private void deleteOwnerData(OwnerAccount owner) {
+		Long ownerId = owner.getId();
+		jdbcTemplate.update("""
+				DELETE payment
+				FROM rent_payments payment
+				JOIN residents resident ON resident.id = payment.resident_id
+				WHERE resident.owner_id = ?
+				""", ownerId);
+		jdbcTemplate.update("""
+				DELETE document
+				FROM resident_document_files document
+				JOIN residents resident
+				  ON document.storage_key = resident.photo_storage_key
+				  OR document.storage_key = resident.identity_proof_storage_key
+				WHERE resident.owner_id = ?
+				""", ownerId);
+		jdbcTemplate.update("DELETE FROM residents WHERE owner_id = ?", ownerId);
+		jdbcTemplate.update("DELETE FROM owner_rooms WHERE owner_id = ?", ownerId);
+		ownerAccountRepository.delete(owner);
+		ownerAccountRepository.flush();
 	}
 
 	@Transactional(readOnly = true)

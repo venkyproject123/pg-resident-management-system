@@ -64,7 +64,8 @@ public class SecurityConfig {
 					.requestMatchers(
 							"/api/owner/setup-status",
 							"/api/owner/setup",
-							"/api/owner/password-recovery/**").permitAll()
+							"/api/owner/password-recovery/**",
+							"/api/admin/password-recovery/**").permitAll()
 					.requestMatchers("/api/admin/**").hasRole("ADMIN")
 					.requestMatchers("/api/**").hasRole("OWNER")
 					.anyRequest().authenticated())

@@ -13,9 +13,7 @@ public interface OwnerAccountRepository extends JpaRepository<OwnerAccount, Long
 
 	Optional<OwnerAccount> findByUsername(String username);
 
-	boolean existsByUsername(String username);
-
-	boolean existsByMobileNumber(String mobileNumber);
+	Optional<OwnerAccount> findByMobileNumber(String mobileNumber);
 
 	boolean existsByMobileNumberAndIdNot(String mobileNumber, Long id);
 

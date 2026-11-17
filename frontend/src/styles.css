@@ -5,8 +5,8 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --green: #276b4d;
-  --green-dark: #1d563d;
+  --green: #426451;
+  --green-dark: #354f40;
   --muted: #78827b;
   --line: #e8ece7;
   --surface: #fff;
@@ -26,13 +26,16 @@ a { color: inherit; text-decoration: none; }
 .muted { color: var(--muted); }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 15px; border: 0; border-radius: 9px; font-size: 12px; font-weight: 700; transition: background .15s, transform .15s; }
 .button:hover:not(:disabled) { transform: translateY(-1px); }
-.button-primary { background: var(--green); color: #fff; box-shadow: 0 5px 12px #276b4d24; }
+.button-primary { background: var(--green); color: #fff; box-shadow: none; }
 .button-primary:hover:not(:disabled) { background: var(--green-dark); }
 .topbar .button[aria-current="page"] { background: var(--green-dark); box-shadow: inset 0 0 0 1px #ffffff38, 0 4px 12px #1d563d30; }
 .topbar .button[aria-current="page"]:hover:not(:disabled) { background: #174832; }
 .topbar .button[aria-expanded="true"] { border: 1px solid #a9ccba; background: #e8f3ec; box-shadow: inset 0 0 0 1px #d4e8db; color: #205b3d; }
 .topbar .button[aria-expanded="true"]:hover:not(:disabled) { background: #dceee2; }
 .button-light { background: #f1f4f0; color: #45564b; }
+.button-light:hover:not(:disabled) { background: #e6ebe6; }
+.landing-hero-actions .button-light { border: 1px solid #dfe7df; background: #fff; color: #40564a; }
+.landing-hero-actions .button-light:hover:not(:disabled) { border-color: #cbd8ce; background: #f7f9f7; }
 .button-danger { border: 1px solid #e7c7c2; background: #fff7f6; color: #a44337; }
 .button-danger:hover:not(:disabled) { background: #ffebe8; }
 .record-payment-button { min-height: 34px; padding: 0 11px; font-size: 11px; white-space: nowrap; }
@@ -85,6 +88,7 @@ a { color: inherit; text-decoration: none; }
 .login-card { display: flex; flex-direction: column; justify-content: center; width: min(480px, 100%); min-height: 0; margin: auto; padding: 42px; border: 1px solid #e1ebe2; border-radius: 22px; background: #ffffffed; box-shadow: 0 24px 70px #1e503016; backdrop-filter: blur(12px); }
 .login-card > .brand { margin-bottom: 36px; }
 .auth-back-button { align-self: flex-start; margin-top: 16px; }
+.admin-reset-form { margin-top: 24px; padding-top: 22px; border-top: 1px solid #e8ede8; }
 .login-card .eyebrow { margin-bottom: 10px; color: var(--green); }
 .login-card h1 { margin: 0; font: 700 35px "Segoe UI", Arial, sans-serif; letter-spacing: -1.8px; }
 .login-card > .muted { margin: 10px 0 30px; font-size: 14px; }
