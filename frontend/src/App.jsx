@@ -1865,7 +1865,10 @@ function App() {
           <span>{[profileForm.locality, profileForm.city].filter(Boolean).join(", ") || profileForm.location || "Property location"}{profileForm.propertyType ? ` · ${profileForm.propertyType === "CO_LIVING" ? "Co-living" : profileForm.propertyType === "BOYS" ? "Boys" : "Girls"}` : ""}</span>
         </div>
         <div className="topbar-right">
-          <button className="button button-primary topbar-payment-button" type="button" aria-expanded={monthlyPaymentsOpen} onClick={showMonthlyPayments}>＋ Payment</button>
+          <button className="button button-primary topbar-payment-button" type="button" aria-label="Manage payments" title="Manage payments" aria-expanded={monthlyPaymentsOpen} onClick={showMonthlyPayments}>
+            <span className="topbar-payment-icon" aria-hidden="true">₹</span>
+            <span className="topbar-payment-label">＋ Payment</span>
+          </button>
           <button className="owner-profile-button" type="button" onClick={openOwnerProfile} aria-label="Open owner profile">
             <OwnerAvatar profile={profileForm} credentials={credentials} version={profilePhotoVersion} />
             <span>{profileForm.ownerName || "Owner profile"}</span>
@@ -1876,7 +1879,7 @@ function App() {
       <div className="page-content">
         <nav className="dashboard-nav" aria-label="Property sections">
           <button type="button" className={dashboardView === "OVERVIEW" ? "active" : ""} aria-current={dashboardView === "OVERVIEW" ? "page" : undefined} onClick={() => setDashboardView("OVERVIEW")}>Overview</button>
-          <button type="button" className="dashboard-nav-add-tenant" onClick={startCreate}>＋ Add tenant</button>
+          <button type="button" className="dashboard-nav-add-tenant" onClick={startCreate}>＋ Add resident</button>
           {[
             ["TENANTS", "Tenants"],
             ["BEDS", "Beds"]
