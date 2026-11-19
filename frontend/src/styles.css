@@ -1182,8 +1182,6 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
 .dashboard-nav button:hover { color: #267052; }
 .dashboard-nav button.active { color: #267052; }
 .dashboard-nav button.active::after { position: absolute; right: 12px; bottom: 0; left: 12px; height: 3px; border-radius: 3px 3px 0 0; background: #43a27e; content: ""; }
-.dashboard-nav .dashboard-nav-add-tenant { min-height: 50px; margin: 0 4px; padding: 0 17px; color: #368b70; font-weight: 700; }
-.dashboard-nav .dashboard-nav-add-tenant:hover { background: #f3f8f5; color: #1d5e43; }
 .page-content { padding-top: 21px; }
 .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stat-card-button { cursor: pointer; }
@@ -1254,7 +1252,6 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
   .owner-profile-avatar { width: 30px; height: 30px; }
   .dashboard-nav { margin-right: -12px; margin-left: -12px; padding: 0 7px; }
   .dashboard-nav button { min-height: 46px; padding: 0 11px; font-size: 11px; }
-  .dashboard-nav .dashboard-nav-add-tenant { margin: 0; padding: 0 11px; }
   .directory-actions { align-items: stretch; flex-direction: column; }
   .tenant-status-filter { align-self: flex-start; }
   .landing-insights { padding: 14px 5% 42px; }

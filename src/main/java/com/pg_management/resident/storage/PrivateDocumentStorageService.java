@@ -129,13 +129,13 @@ public class PrivateDocumentStorageService {
 	}
 
 	private void persistDocument(String storageKey, byte[] content, MediaType mediaType) {
+		documentRepository.saveAndFlush(
+				new StoredResidentDocument(storageKey, new byte[0], mediaType.toString()));
 		for (int offset = 0, index = 0; offset < content.length; offset += STORAGE_CHUNK_SIZE, index++) {
 			int end = Math.min(content.length, offset + STORAGE_CHUNK_SIZE);
 			chunkRepository.saveAndFlush(new StoredResidentDocumentChunk(
 					storageKey, index, java.util.Arrays.copyOfRange(content, offset, end)));
 		}
-		documentRepository.saveAndFlush(
-				new StoredResidentDocument(storageKey, new byte[0], mediaType.toString()));
 	}
 
 	private Path resolveStoragePath(String storageKey) {

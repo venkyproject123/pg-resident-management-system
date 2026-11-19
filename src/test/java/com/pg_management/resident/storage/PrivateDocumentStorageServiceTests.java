@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +21,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -53,6 +56,9 @@ class PrivateDocumentStorageServiceTests {
 		assertEquals(3, savedChunks.size());
 		assertTrue(savedChunks.stream().allMatch(chunk -> chunk.getContent().length <= 16 * 1024));
 		assertEquals(0, storedDocument.getValue().getContent().length);
+		InOrder persistenceOrder = inOrder(repository, chunkRepository);
+		persistenceOrder.verify(repository).saveAndFlush(any(StoredResidentDocument.class));
+		persistenceOrder.verify(chunkRepository, times(3)).saveAndFlush(any(StoredResidentDocumentChunk.class));
 		when(repository.findById(storageKey)).thenReturn(Optional.of(storedDocument.getValue()));
 		when(chunkRepository.findAllByStorageKeyOrderByChunkIndex(storageKey)).thenReturn(savedChunks);
 		ResidentDocument document = storage.load(storageKey);
