@@ -351,6 +351,7 @@ function App() {
   const [rooms, setRooms] = useState([]);
   const [roomForm, setRoomForm] = useState({ roomNumber: "", sharing: "" });
   const [monthlyPaymentReport, setMonthlyPaymentReport] = useState(null);
+  const [pendingPaymentSearchText, setPendingPaymentSearchText] = useState("");
   const [dashboardView, setDashboardView] = useState(readSavedDashboardView);
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
@@ -1845,6 +1846,12 @@ function App() {
   const totalEmptyBeds = dashboardSummary?.availableBeds ?? 0;
   const firstPaymentPeriod = dashboardSummary?.firstPaymentPeriod || "";
   const pendingPayments = monthlyPaymentReport?.residents.filter((payment) => payment.remaining > 0) || [];
+  const pendingPaymentSearch = pendingPaymentSearchText.trim().toLocaleLowerCase();
+  const visiblePendingPayments = pendingPayments.filter((payment) =>
+    !pendingPaymentSearch
+    || String(payment.residentName || "").toLocaleLowerCase().includes(pendingPaymentSearch)
+    || String(payment.roomNumber || "").toLocaleLowerCase().includes(pendingPaymentSearch)
+  );
   const monthlyMemberCount = monthlyPaymentReport?.residents.length || 0;
   const monthlyEmptyBeds = dashboardSummary
     ? Math.max(0, dashboardSummary.totalBeds - monthlyMemberCount)
@@ -1866,8 +1873,7 @@ function App() {
         </div>
         <div className="topbar-right">
           <button className="button button-primary topbar-payment-button" type="button" aria-label="Manage payments" title="Manage payments" aria-expanded={monthlyPaymentsOpen} onClick={showMonthlyPayments}>
-            <span className="topbar-payment-icon" aria-hidden="true">₹</span>
-            <span className="topbar-payment-label">＋ Payment</span>
+            + Payment
           </button>
           <button className="owner-profile-button" type="button" onClick={openOwnerProfile} aria-label="Open owner profile">
             <OwnerAvatar profile={profileForm} credentials={credentials} version={profilePhotoVersion} />
@@ -1879,12 +1885,17 @@ function App() {
       <div className="page-content">
         <nav className="dashboard-nav" aria-label="Property sections">
           <button type="button" className={dashboardView === "OVERVIEW" ? "active" : ""} aria-current={dashboardView === "OVERVIEW" ? "page" : undefined} onClick={() => setDashboardView("OVERVIEW")}>Overview</button>
-          <button type="button" className="dashboard-nav-add-tenant" onClick={startCreate}>＋ Add resident</button>
+          <button
+            type="button"
+            className={`dashboard-nav-add-tenant${formOpen && editingId === null ? " active" : ""}`}
+            aria-current={formOpen && editingId === null ? "page" : undefined}
+            onClick={startCreate}
+          >Add resident</button>
           {[
             ["TENANTS", "Tenants"],
             ["BEDS", "Beds"]
           ].map(([view, label]) => (
-            <button type="button" className={dashboardView === view ? "active" : ""} aria-current={dashboardView === view ? "page" : undefined} key={view} onClick={() => {
+            <button type="button" className={dashboardView === view && !(view === "TENANTS" && formOpen && editingId === null) ? "active" : ""} aria-current={dashboardView === view && !(view === "TENANTS" && formOpen && editingId === null) ? "page" : undefined} key={view} onClick={() => {
               setDashboardView(view);
               setRentPaymentResident(null);
               setPaymentDraft(null);
@@ -2066,12 +2077,25 @@ function App() {
               <div className="payment-list-heading">
                 <div>
                   <p className="eyebrow">FOLLOW-UP</p>
-                  <h3>Pending payments <span className="count-pill">{pendingPayments.length}</span></h3>
+                  <h3>Pending payments <span className="count-pill">{visiblePendingPayments.length}</span></h3>
                 </div>
-                <p className="muted">Residents disappear from this list when the selected month is fully paid.</p>
+                <label className="payment-search">
+                  <span className="visually-hidden">Search pending payments by resident name or room number</span>
+                  <input
+                    type="search"
+                    aria-label="Search pending payments by resident name or room number"
+                    placeholder="Search name or room number"
+                    value={pendingPaymentSearchText}
+                    onChange={(event) => setPendingPaymentSearchText(event.target.value)}
+                  />
+                </label>
               </div>
-              {pendingPayments.length === 0 ? (
-                <p className="room-availability-empty">No pending payments for this month.</p>
+              {visiblePendingPayments.length === 0 ? (
+                <p className="room-availability-empty">
+                  {pendingPayments.length === 0
+                    ? "No pending payments for this month."
+                    : "No pending payments match that name or room number."}
+                </p>
               ) : (
               <div className="table-wrap">
                 <table>
@@ -2079,7 +2103,7 @@ function App() {
                     <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>MOBILE</th><th>RENT DATE</th><th>MONTHLY RENT</th><th>ACTION</th></tr>
                   </thead>
                   <tbody>
-                    {pendingPayments.map((payment) => (
+                    {visiblePendingPayments.map((payment) => (
                       <tr key={payment.residentId}>
                         <td data-label="Resident">
                           <button type="button" className="pending-resident-link" onClick={() => openResidentDetails({
@@ -2162,7 +2186,7 @@ function App() {
                 <div className="empty-illustration">⌂</div>
                 <h3>{searchText.trim() ? "No matching tenants" : "Your tenant directory is ready"}</h3>
                 <p>{searchText.trim() ? "Try another name or room number." : "Add your first tenant to start building your directory."}</p>
-                {!searchText.trim() && <button className="button button-primary" onClick={startCreate}>＋ Add tenant</button>}
+                {!searchText.trim() && <button className="button button-primary" onClick={startCreate}>Add resident</button>}
               </div>
             ) : (
               <div className="table-wrap">

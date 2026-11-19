@@ -26,7 +26,7 @@ public class PrivateDocumentStorageService {
 
 	private static final Pattern STORAGE_KEY_PATTERN =
 			Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|pdf)");
-	private static final int STORAGE_CHUNK_SIZE = 48 * 1024;
+	private static final int STORAGE_CHUNK_SIZE = 16 * 1024;
 
 	private final Path storageDirectory;
 	private final StoredResidentDocumentRepository documentRepository;

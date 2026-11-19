@@ -42,7 +42,7 @@ class PrivateDocumentStorageServiceTests {
 		});
 		PrivateDocumentStorageService storage =
 				new PrivateDocumentStorageService(temporaryDirectory.toString(), repository, chunkRepository);
-		byte[] pdfBytes = new byte[120 * 1024];
+		byte[] pdfBytes = new byte[48 * 1024];
 		System.arraycopy("%PDF-1.7".getBytes(StandardCharsets.US_ASCII), 0, pdfBytes, 0, 8);
 
 		String storageKey = storage.store(
@@ -51,7 +51,7 @@ class PrivateDocumentStorageServiceTests {
 		ArgumentCaptor<StoredResidentDocument> storedDocument = ArgumentCaptor.forClass(StoredResidentDocument.class);
 		verify(repository).saveAndFlush(storedDocument.capture());
 		assertEquals(3, savedChunks.size());
-		assertTrue(savedChunks.stream().allMatch(chunk -> chunk.getContent().length <= 48 * 1024));
+		assertTrue(savedChunks.stream().allMatch(chunk -> chunk.getContent().length <= 16 * 1024));
 		assertEquals(0, storedDocument.getValue().getContent().length);
 		when(repository.findById(storageKey)).thenReturn(Optional.of(storedDocument.getValue()));
 		when(chunkRepository.findAllByStorageKeyOrderByChunkIndex(storageKey)).thenReturn(savedChunks);
