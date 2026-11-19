@@ -86,6 +86,42 @@ function ResidentAvatar({ resident, credentials, className = "avatar" }) {
     : <span className={className} aria-label={`${resident.name} profile`}>{resident.name.trim().charAt(0).toUpperCase()}</span>;
 }
 
+function OwnerAvatar({ profile, credentials, version = 0, className = "owner-profile-avatar" }) {
+  const [photoUrl, setPhotoUrl] = useState("");
+  useEffect(() => {
+    if (!profile?.hasProfilePhoto || !credentials) {
+      setPhotoUrl("");
+      return undefined;
+    }
+    let active = true;
+    let objectUrl = "";
+    fetch(apiUrl("/api/owner/profile/photo"), {
+      headers: { Authorization: authorizationValue(credentials) },
+      cache: "no-store"
+    }).then((response) => {
+      if (!response.ok) throw new Error("Owner profile photo unavailable");
+      return response.blob();
+    }).then((blob) => {
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob);
+      setPhotoUrl(objectUrl);
+    }).catch(() => { if (active) setPhotoUrl(""); });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [profile?.hasProfilePhoto, credentials, version]);
+  const initials = (profile?.ownerName || profile?.username || "O")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((namePart) => namePart.charAt(0).toUpperCase())
+    .join("");
+  return photoUrl
+    ? <img className={className} src={photoUrl} alt={`${profile?.ownerName || "Owner"} profile`} />
+    : <span className={className} aria-label={`${profile?.ownerName || "Owner"} profile`}>{initials}</span>;
+}
+
 async function request(
   path,
   credentials,
@@ -207,6 +243,9 @@ function App() {
   });
   const [generatedRecoveryId, setGeneratedRecoveryId] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profilePhotoVersion, setProfilePhotoVersion] = useState(0);
+  const profilePhotoInput = useRef(null);
   const [profileEditForm, setProfileEditForm] = useState({
     ownerName: "",
     mobileNumber: "",
@@ -437,7 +476,8 @@ function App() {
               ownerName: profile.ownerName || "",
               propertyType: profile.propertyType || "",
               locality: profile.locality || "",
-              city: profile.city || ""
+              city: profile.city || "",
+              hasProfilePhoto: Boolean(profile.hasProfilePhoto)
             });
           } else {
             const overview = await request(
@@ -642,7 +682,8 @@ function App() {
         ownerName: profile.ownerName || "",
         propertyType: profile.propertyType || "",
         locality: profile.locality || "",
-        city: profile.city || ""
+        city: profile.city || "",
+        hasProfilePhoto: Boolean(profile.hasProfilePhoto)
       });
       setCredentials(ownerCredentials);
       setNotice("");
@@ -663,6 +704,21 @@ function App() {
       city: profileForm.city || ""
     });
     setProfileOpen(true);
+    setProfileEditing(false);
+    setError("");
+    setNotice("");
+  }
+
+  function startProfileEdit() {
+    setProfileEditForm({
+      ownerName: profileForm.ownerName || "",
+      mobileNumber: profileForm.mobileNumber?.replace(/^\+91/, "") || "",
+      pgName: profileForm.pgName || "",
+      propertyType: profileForm.propertyType || "",
+      locality: profileForm.locality || "",
+      city: profileForm.city || ""
+    });
+    setProfileEditing(true);
     setError("");
     setNotice("");
   }
@@ -692,12 +748,43 @@ function App() {
         ...profile,
         mobileNumber: profile.mobileNumber?.replace(/^\+91/, "") || ""
       });
-      setProfileOpen(false);
+      setProfileEditing(false);
       setNotice("Your profile has been updated.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleOwnerPhotoUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setError("Choose a JPEG or PNG profile photo.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Choose a profile photo smaller than 5 MB.");
+      event.target.value = "";
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      await request("/api/owner/profile/photo", credentials, { method: "POST", body });
+      setProfileForm((profile) => ({ ...profile, hasProfilePhoto: true }));
+      setProfilePhotoVersion((version) => version + 1);
+      setNotice("Your profile photo has been updated.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+      event.target.value = "";
     }
   }
 
@@ -946,6 +1033,8 @@ function App() {
   }
 
   function logout() {
+    setProfileOpen(false);
+    setProfileEditing(false);
     sessionStorage.removeItem("haven-auth-session");
     setCredentials(null);
     setResidentPage({
@@ -1684,12 +1773,6 @@ function App() {
   const monthlyPaymentsOpen = dashboardView === "PAYMENTS";
   const emptyBedsOpen = dashboardView === "BEDS";
   const ownerWorkspaceOpen = dashboardView === "OVERVIEW";
-  const ownerInitials = (profileForm.ownerName || profileForm.username || "O")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((namePart) => namePart.charAt(0).toUpperCase())
-    .join("");
   return (
     <main className="dashboard">
       <header className="topbar owner-topbar">
@@ -1705,10 +1788,9 @@ function App() {
           <button className="button button-primary topbar-payment-button" type="button" aria-expanded={monthlyPaymentsOpen} onClick={showMonthlyPayments}>＋ Payment</button>
           <button className="button button-light topbar-add-tenant" type="button" onClick={startCreate}>＋ Add tenant</button>
           <button className="owner-profile-button" type="button" onClick={openOwnerProfile} aria-label="Open owner profile">
-            <span className="owner-profile-avatar">{ownerInitials}</span>
+            <OwnerAvatar profile={profileForm} credentials={credentials} version={profilePhotoVersion} />
             <span>{profileForm.ownerName || "Owner profile"}</span>
           </button>
-          <button className="button button-primary" onClick={logout}>Sign out</button>
         </div>
       </header>
 
@@ -2146,7 +2228,6 @@ function App() {
                 </section>
               </div>
               <footer className="resident-drawer-actions">
-                <button type="button" className="resident-action-button action-history" disabled={loading || residentDetailsLoading} onClick={() => openRentPayments(residentDetails)}>Rent history</button>
                 {residentDetails.status === "ACTIVE" && <button type="button" className="resident-action-button action-history" disabled={loading || residentDetailsLoading} onClick={() => {
                   const [year, month] = selectedPaymentPeriod.split("-").map(Number);
                   openRentPayments(residentDetails, year, month, true);
@@ -2367,41 +2448,70 @@ function App() {
               <div className="resident-dialog-heading">
                 <p className="eyebrow">ACCOUNT DETAILS</p>
                 <h2 id="owner-profile-title">My profile</h2>
-                <p className="muted">Update your contact and property information.</p>
+                <p className="muted">{profileEditing ? "Edit your contact and property information." : "Your owner and property information."}</p>
+                {!profileEditing && <button className="button button-primary profile-edit-button" type="button" onClick={startProfileEdit}>Edit profile</button>}
                 <button className="icon-button profile-close" type="button" disabled={loading} onClick={() => setProfileOpen(false)} aria-label="Close profile">×</button>
               </div>
-              <form className="resident-form profile-form" onSubmit={handleProfileUpdate}>
+              <div className="resident-form profile-form">
+                {error && <div className="alert alert-error" role="alert">{error}</div>}
                 <div className="profile-summary">
-                  <span className="profile-avatar">{ownerInitials}</span>
-                  <div><strong>{profileForm.ownerName || profileForm.pgName}</strong><span>{profileForm.username}</span></div>
+                  <OwnerAvatar profile={profileForm} credentials={credentials} version={profilePhotoVersion} className="profile-avatar" />
+                  <div>
+                    <strong>{profileForm.ownerName || profileForm.pgName}</strong>
+                    <span>{profileForm.pgName}</span>
+                    <input ref={profilePhotoInput} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={handleOwnerPhotoUpload} />
+                    <button className="text-action profile-photo-action" type="button" disabled={loading} onClick={() => profilePhotoInput.current?.click()}>
+                      {loading ? "Uploading…" : profileForm.hasProfilePhoto ? "Change profile photo" : "Add profile photo"}
+                    </button>
+                  </div>
                 </div>
-                <div className="auth-registration-grid">
-                  <label>Username<input autoComplete="name" maxLength="100" required value={profileEditForm.ownerName} onChange={(event) => setProfileEditForm({ ...profileEditForm, ownerName: event.target.value })} /></label>
-                  <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" autoComplete="tel-national" maxLength="10" pattern="[6-9][0-9]{9}" required value={profileEditForm.mobileNumber} onChange={(event) => setProfileEditForm({ ...profileEditForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
-                  <label>Property name<input maxLength="100" required value={profileEditForm.pgName} onChange={(event) => setProfileEditForm({ ...profileEditForm, pgName: event.target.value })} /></label>
-                  <fieldset className="occupancy-field">
-                    <legend>Occupancy</legend>
-                    <div className="occupancy-segmented" role="group" aria-label="Occupancy type">
-                      {[["CO_LIVING", "Co-living"], ["BOYS", "Boys"], ["GIRLS", "Girls"]].map(([value, label]) => (
-                        <button
-                          type="button"
-                          className={profileEditForm.propertyType === value ? "selected" : ""}
-                          aria-pressed={profileEditForm.propertyType === value}
-                          key={value}
-                          onClick={() => setProfileEditForm({ ...profileEditForm, propertyType: value })}
-                        >{label}</button>
-                      ))}
+                {profileEditing ? (
+                  <form onSubmit={handleProfileUpdate}>
+                    <div className="auth-registration-grid">
+                      <label>Owner name<input autoComplete="name" maxLength="100" required value={profileEditForm.ownerName} onChange={(event) => setProfileEditForm({ ...profileEditForm, ownerName: event.target.value })} /></label>
+                      <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" autoComplete="tel-national" maxLength="10" pattern="[6-9][0-9]{9}" required value={profileEditForm.mobileNumber} onChange={(event) => setProfileEditForm({ ...profileEditForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
+                      <label>Property name<input maxLength="100" required value={profileEditForm.pgName} onChange={(event) => setProfileEditForm({ ...profileEditForm, pgName: event.target.value })} /></label>
+                      <fieldset className="occupancy-field">
+                        <legend>Occupancy</legend>
+                        <div className="occupancy-segmented" role="group" aria-label="Occupancy type">
+                          {[["CO_LIVING", "Co-living"], ["BOYS", "Boys"], ["GIRLS", "Girls"]].map(([value, label]) => (
+                            <button
+                              type="button"
+                              className={profileEditForm.propertyType === value ? "selected" : ""}
+                              aria-pressed={profileEditForm.propertyType === value}
+                              key={value}
+                              onClick={() => setProfileEditForm({ ...profileEditForm, propertyType: value })}
+                            >{label}</button>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <label>Locality<input maxLength="100" required value={profileEditForm.locality} onChange={(event) => setProfileEditForm({ ...profileEditForm, locality: event.target.value })} /></label>
+                      <label>City<input maxLength="100" required value={profileEditForm.city} onChange={(event) => setProfileEditForm({ ...profileEditForm, city: event.target.value })} /></label>
                     </div>
-                  </fieldset>
-                  <label>Locality<input maxLength="100" required value={profileEditForm.locality} onChange={(event) => setProfileEditForm({ ...profileEditForm, locality: event.target.value })} /></label>
-                  <label>City<input maxLength="100" required value={profileEditForm.city} onChange={(event) => setProfileEditForm({ ...profileEditForm, city: event.target.value })} /></label>
-                </div>
-                <p className="profile-email-note">Sign-in email: <strong>{profileForm.username}</strong></p>
-                <div className="form-footer-actions">
-                  <button type="button" className="button button-light" disabled={loading} onClick={() => setProfileOpen(false)}>Cancel</button>
-                  <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving profile…" : "Save profile"}</button>
-                </div>
-              </form>
+                    <p className="profile-email-note">Sign-in email: <strong>{profileForm.username}</strong></p>
+                    <div className="form-footer-actions">
+                      <button type="button" className="button button-light" disabled={loading} onClick={() => setProfileEditing(false)}>Cancel</button>
+                      <button type="submit" className="button button-primary" disabled={loading}>{loading ? "Saving profile…" : "Save profile"}</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <dl className="owner-profile-details">
+                      <div><dt>Owner name</dt><dd>{profileForm.ownerName || "—"}</dd></div>
+                      <div><dt>Sign-in email</dt><dd>{profileForm.username || "—"}</dd></div>
+                      <div><dt>Mobile number</dt><dd>{profileForm.mobileNumber ? `+91 ${profileForm.mobileNumber.replace(/^\+91/, "")}` : "—"}</dd></div>
+                      <div><dt>Property name</dt><dd>{profileForm.pgName || "—"}</dd></div>
+                      <div><dt>Occupancy</dt><dd>{profileForm.propertyType === "CO_LIVING" ? "Co-living" : profileForm.propertyType === "BOYS" ? "Boys" : profileForm.propertyType === "GIRLS" ? "Girls" : "—"}</dd></div>
+                      <div><dt>Locality</dt><dd>{profileForm.locality || "—"}</dd></div>
+                      <div><dt>City</dt><dd>{profileForm.city || "—"}</dd></div>
+                    </dl>
+                    <div className="form-footer-actions profile-view-actions">
+                      <button type="button" className="button button-danger" disabled={loading} onClick={logout}>Sign out</button>
+                      <button type="button" className="button button-light" disabled={loading} onClick={() => setProfileOpen(false)}>Close</button>
+                    </div>
+                  </>
+                )}
+              </div>
             </section>
           </div>
         )}

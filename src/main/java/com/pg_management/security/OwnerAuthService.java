@@ -10,7 +10,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.pg_management.resident.storage.PrivateDocumentStorageService;
+import com.pg_management.resident.storage.ResidentDocument;
+import com.pg_management.resident.storage.ResidentDocumentType;
 
 @Service
 @Transactional(noRollbackFor = ResponseStatusException.class)
@@ -21,16 +28,19 @@ public class OwnerAuthService {
 	private final OwnerAccountRepository ownerAccountRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JdbcTemplate jdbcTemplate;
+	private final PrivateDocumentStorageService documentStorage;
 	private final String adminEmail;
 
 	public OwnerAuthService(
 			OwnerAccountRepository ownerAccountRepository,
 			PasswordEncoder passwordEncoder,
 			JdbcTemplate jdbcTemplate,
+			PrivateDocumentStorageService documentStorage,
 			@Value("${app.admin.email:}") String adminEmail) {
 		this.ownerAccountRepository = ownerAccountRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jdbcTemplate = jdbcTemplate;
+		this.documentStorage = documentStorage;
 		this.adminEmail = adminEmail.trim().toLowerCase(java.util.Locale.ROOT);
 	}
 
@@ -154,6 +164,16 @@ public class OwnerAuthService {
 	private void deleteOwnerData(OwnerAccount owner) {
 		Long ownerId = owner.getId();
 		jdbcTemplate.update("""
+				DELETE chunk
+				FROM resident_document_chunks chunk
+				JOIN resident_document_files document
+				  ON document.storage_key = chunk.storage_key
+				JOIN residents resident
+				  ON document.storage_key = resident.photo_storage_key
+				  OR document.storage_key = resident.identity_proof_storage_key
+				WHERE resident.owner_id = ?
+				""", ownerId);
+		jdbcTemplate.update("""
 				DELETE payment
 				FROM rent_payments payment
 				JOIN residents resident ON resident.id = payment.resident_id
@@ -167,6 +187,14 @@ public class OwnerAuthService {
 				  OR document.storage_key = resident.identity_proof_storage_key
 				WHERE resident.owner_id = ?
 				""", ownerId);
+		if (owner.getProfilePhotoStorageKey() != null) {
+			jdbcTemplate.update(
+					"DELETE FROM resident_document_chunks WHERE storage_key = ?",
+					owner.getProfilePhotoStorageKey());
+			jdbcTemplate.update(
+					"DELETE FROM resident_document_files WHERE storage_key = ?",
+					owner.getProfilePhotoStorageKey());
+		}
 		jdbcTemplate.update("DELETE FROM residents WHERE owner_id = ?", ownerId);
 		jdbcTemplate.update("DELETE FROM owner_rooms WHERE owner_id = ?", ownerId);
 		ownerAccountRepository.delete(owner);
@@ -185,7 +213,58 @@ public class OwnerAuthService {
 				owner.getOwnerName(),
 				owner.getPropertyType(),
 				owner.getLocality(),
-				owner.getCity());
+				owner.getCity(),
+				owner.getProfilePhotoStorageKey() != null);
+	}
+
+	public void uploadProfilePhoto(String username, MultipartFile file) {
+		OwnerAccount owner = findActiveOwner(username);
+		String previousStorageKey = owner.getProfilePhotoStorageKey();
+		String newStorageKey = documentStorage.store(file, ResidentDocumentType.PHOTO);
+		owner.setProfilePhotoStorageKey(newStorageKey);
+		try {
+			ownerAccountRepository.save(owner);
+		} catch (RuntimeException exception) {
+			cleanupProfilePhoto(newStorageKey);
+			throw exception;
+		}
+		if (TransactionSynchronizationManager.isSynchronizationActive()) {
+			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+				@Override
+				public void afterCompletion(int status) {
+					if (status == STATUS_COMMITTED && previousStorageKey != null) {
+						cleanupProfilePhoto(previousStorageKey);
+					} else if (status != STATUS_COMMITTED) {
+						cleanupProfilePhoto(newStorageKey);
+					}
+				}
+			});
+		} else if (previousStorageKey != null) {
+			cleanupProfilePhoto(previousStorageKey);
+		}
+	}
+
+	@Transactional(readOnly = true)
+	public ResidentDocument getProfilePhoto(String username) {
+		OwnerAccount owner = findActiveOwner(username);
+		if (owner.getProfilePhotoStorageKey() == null) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner profile photo not found");
+		}
+		return documentStorage.load(owner.getProfilePhotoStorageKey());
+	}
+
+	private OwnerAccount findActiveOwner(String username) {
+		return ownerAccountRepository.findByUsername(username)
+				.filter(account -> !account.isRemoved())
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Owner account not found"));
+	}
+
+	private void cleanupProfilePhoto(String storageKey) {
+		try {
+			documentStorage.delete(storageKey);
+		} catch (ResponseStatusException exception) {
+			LOGGER.warn("Could not clean up an owner profile photo");
+		}
 	}
 
 	public OwnerProfile updateProfile(
@@ -226,7 +305,8 @@ public class OwnerAuthService {
 			String ownerName,
 			String propertyType,
 			String locality,
-			String city) {
+			String city,
+			boolean hasProfilePhoto) {
 	}
 
 	public record OwnerSummary(

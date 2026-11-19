@@ -1,11 +1,13 @@
 package com.pg_management.resident.storage;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -13,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -23,14 +26,18 @@ public class PrivateDocumentStorageService {
 
 	private static final Pattern STORAGE_KEY_PATTERN =
 			Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|pdf)");
+	private static final int STORAGE_CHUNK_SIZE = 512 * 1024;
 
 	private final Path storageDirectory;
 	private final StoredResidentDocumentRepository documentRepository;
+	private final StoredResidentDocumentChunkRepository chunkRepository;
 
 	public PrivateDocumentStorageService(
 			@Value("${app.upload.directory}") String directory,
-			StoredResidentDocumentRepository documentRepository) {
+			StoredResidentDocumentRepository documentRepository,
+			StoredResidentDocumentChunkRepository chunkRepository) {
 		this.documentRepository = documentRepository;
+		this.chunkRepository = chunkRepository;
 		storageDirectory = Path.of(directory).toAbsolutePath().normalize();
 		try {
 			Files.createDirectories(storageDirectory);
@@ -42,6 +49,7 @@ public class PrivateDocumentStorageService {
 		}
 	}
 
+	@Transactional
 	public String store(MultipartFile upload, ResidentDocumentType documentType) {
 		if (upload == null || upload.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a non-empty file");
@@ -66,16 +74,31 @@ public class PrivateDocumentStorageService {
 		String extension = detectExtension(content, documentType);
 		String storageKey = UUID.randomUUID() + "." + extension;
 		MediaType mediaType = mediaTypeFor(storageKey);
-		documentRepository.saveAndFlush(new StoredResidentDocument(storageKey, content, mediaType.toString()));
+		persistDocument(storageKey, content, mediaType);
 		return storageKey;
 	}
 
 	public ResidentDocument load(String storageKey) {
 		validateStorageKey(storageKey);
-		return documentRepository.findById(storageKey)
-				.map(document -> new ResidentDocument(
-						document.getContent(), MediaType.parseMediaType(document.getMediaType())))
-				.orElseGet(() -> loadLegacyFile(storageKey));
+		var storedDocument = documentRepository.findById(storageKey);
+		if (storedDocument.isEmpty()) {
+			return loadLegacyFile(storageKey);
+		}
+		StoredResidentDocument document = storedDocument.get();
+		byte[] content = document.getContent();
+		if (content.length == 0) {
+			content = loadChunks(storageKey);
+		}
+		return new ResidentDocument(content, MediaType.parseMediaType(document.getMediaType()));
+	}
+
+	private byte[] loadChunks(String storageKey) {
+		List<StoredResidentDocumentChunk> chunks = chunkRepository.findAllByStorageKeyOrderByChunkIndex(storageKey);
+		ByteArrayOutputStream content = new ByteArrayOutputStream();
+		for (StoredResidentDocumentChunk chunk : chunks) {
+			content.writeBytes(chunk.getContent());
+		}
+		return content.toByteArray();
 	}
 
 	private ResidentDocument loadLegacyFile(String storageKey) {
@@ -83,7 +106,7 @@ public class PrivateDocumentStorageService {
 		try {
 			byte[] content = Files.readAllBytes(path);
 			MediaType mediaType = mediaTypeFor(storageKey);
-			documentRepository.saveAndFlush(new StoredResidentDocument(storageKey, content, mediaType.toString()));
+			persistDocument(storageKey, content, mediaType);
 			return new ResidentDocument(content, mediaType);
 		} catch (java.nio.file.NoSuchFileException exception) {
 			throw new ResponseStatusException(
@@ -93,14 +116,26 @@ public class PrivateDocumentStorageService {
 		}
 	}
 
+	@Transactional
 	public void delete(String storageKey) {
 		Path path = resolveStoragePath(storageKey);
+		chunkRepository.deleteAllByStorageKey(storageKey);
 		documentRepository.deleteById(storageKey);
 		try {
 			Files.deleteIfExists(path);
 		} catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not remove replaced document");
 		}
+	}
+
+	private void persistDocument(String storageKey, byte[] content, MediaType mediaType) {
+		for (int offset = 0, index = 0; offset < content.length; offset += STORAGE_CHUNK_SIZE, index++) {
+			int end = Math.min(content.length, offset + STORAGE_CHUNK_SIZE);
+			chunkRepository.saveAndFlush(new StoredResidentDocumentChunk(
+					storageKey, index, java.util.Arrays.copyOfRange(content, offset, end)));
+		}
+		documentRepository.saveAndFlush(
+				new StoredResidentDocument(storageKey, new byte[0], mediaType.toString()));
 	}
 
 	private Path resolveStoragePath(String storageKey) {

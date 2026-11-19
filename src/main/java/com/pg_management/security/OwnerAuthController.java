@@ -1,6 +1,7 @@
 package com.pg_management.security;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -9,6 +10,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.pg_management.resident.storage.ResidentDocument;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -61,6 +66,23 @@ public class OwnerAuthController {
 				request.propertyType(),
 				request.locality(),
 				request.city());
+	}
+
+	@PostMapping("/profile/photo")
+	public ResponseEntity<Void> uploadProfilePhoto(
+			Authentication authentication, @RequestPart("file") MultipartFile file) {
+		ownerAuthService.uploadProfilePhoto(authentication.getName(), file);
+		return ResponseEntity.noContent().build();
+	}
+
+	@GetMapping("/profile/photo")
+	public ResponseEntity<byte[]> profilePhoto(Authentication authentication) {
+		ResidentDocument document = ownerAuthService.getProfilePhoto(authentication.getName());
+		return ResponseEntity.ok()
+				.contentType(document.mediaType())
+				.cacheControl(CacheControl.noStore())
+				.header("X-Content-Type-Options", "nosniff")
+				.body(document.content());
 	}
 
 	public record SetupStatus(boolean setupRequired) {

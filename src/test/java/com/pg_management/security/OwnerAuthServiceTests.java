@@ -20,6 +20,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.pg_management.resident.storage.PrivateDocumentStorageService;
+
 @ExtendWith(MockitoExtension.class)
 class OwnerAuthServiceTests {
 
@@ -29,13 +31,16 @@ class OwnerAuthServiceTests {
 	@Mock
 	private JdbcTemplate jdbcTemplate;
 
+	@Mock
+	private PrivateDocumentStorageService documentStorage;
+
 	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 	private OwnerAuthService ownerAuthService;
 
 	@BeforeEach
 	void createService() {
 		ownerAuthService = new OwnerAuthService(
-				ownerAccountRepository, passwordEncoder, jdbcTemplate, "admin");
+				ownerAccountRepository, passwordEncoder, jdbcTemplate, documentStorage, "admin");
 	}
 
 	@Test

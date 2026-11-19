@@ -47,6 +47,9 @@ public class OwnerAccount {
 	@Column(name = "mobile_number", length = 20, unique = true)
 	private String mobileNumber;
 
+	@Column(name = "profile_photo_storage_key", length = 50)
+	private String profilePhotoStorageKey;
+
 	@Column(nullable = false, columnDefinition = "boolean not null default true")
 	private boolean approved = true;
 
@@ -144,6 +147,14 @@ public class OwnerAccount {
 
 	public String getMobileNumber() {
 		return mobileNumber;
+	}
+
+	public String getProfilePhotoStorageKey() {
+		return profilePhotoStorageKey;
+	}
+
+	public void setProfilePhotoStorageKey(String profilePhotoStorageKey) {
+		this.profilePhotoStorageKey = profilePhotoStorageKey;
 	}
 
 	public boolean isApproved() {

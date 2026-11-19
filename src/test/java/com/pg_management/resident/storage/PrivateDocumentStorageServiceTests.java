@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -28,18 +30,29 @@ class PrivateDocumentStorageServiceTests {
 	@Test
 	void storesAndLoadsPdfWithGeneratedPrivateKey() throws Exception {
 		StoredResidentDocumentRepository repository = mock(StoredResidentDocumentRepository.class);
+		StoredResidentDocumentChunkRepository chunkRepository = mock(StoredResidentDocumentChunkRepository.class);
+		List<StoredResidentDocumentChunk> savedChunks = new ArrayList<>();
 		when(repository.saveAndFlush(any(StoredResidentDocument.class)))
 				.thenAnswer(invocation -> invocation.getArgument(0));
+		when(chunkRepository.saveAndFlush(any(StoredResidentDocumentChunk.class))).thenAnswer(invocation -> {
+			StoredResidentDocumentChunk chunk = invocation.getArgument(0);
+			savedChunks.add(chunk);
+			return chunk;
+		});
 		PrivateDocumentStorageService storage =
-				new PrivateDocumentStorageService(temporaryDirectory.toString(), repository);
-		byte[] pdfBytes = "%PDF-1.7 sample".getBytes(StandardCharsets.US_ASCII);
+				new PrivateDocumentStorageService(temporaryDirectory.toString(), repository, chunkRepository);
+		byte[] pdfBytes = new byte[1200 * 1024];
+		System.arraycopy("%PDF-1.7".getBytes(StandardCharsets.US_ASCII), 0, pdfBytes, 0, 8);
 
 		String storageKey = storage.store(
 				new MockMultipartFile("file", "identity.pdf", "application/pdf", pdfBytes),
 				ResidentDocumentType.IDENTITY_PROOF);
 		ArgumentCaptor<StoredResidentDocument> storedDocument = ArgumentCaptor.forClass(StoredResidentDocument.class);
 		verify(repository).saveAndFlush(storedDocument.capture());
+		assertEquals(3, savedChunks.size());
+		assertEquals(0, storedDocument.getValue().getContent().length);
 		when(repository.findById(storageKey)).thenReturn(Optional.of(storedDocument.getValue()));
+		when(chunkRepository.findAllByStorageKeyOrderByChunkIndex(storageKey)).thenReturn(savedChunks);
 		ResidentDocument document = storage.load(storageKey);
 
 		assertEquals("application/pdf", document.mediaType().toString());
@@ -52,7 +65,9 @@ class PrivateDocumentStorageServiceTests {
 	@Test
 	void rejectsPhotoWithUnsupportedContent() {
 		PrivateDocumentStorageService storage = new PrivateDocumentStorageService(
-				temporaryDirectory.toString(), mock(StoredResidentDocumentRepository.class));
+				temporaryDirectory.toString(),
+				mock(StoredResidentDocumentRepository.class),
+				mock(StoredResidentDocumentChunkRepository.class));
 		MockMultipartFile fakeImage =
 				new MockMultipartFile("file", "photo.png", "image/png", "not an image".getBytes(StandardCharsets.UTF_8));
 
@@ -66,7 +81,9 @@ class PrivateDocumentStorageServiceTests {
 	@Test
 	void rejectsFilesLargerThanFiveMegabytes() {
 		PrivateDocumentStorageService storage = new PrivateDocumentStorageService(
-				temporaryDirectory.toString(), mock(StoredResidentDocumentRepository.class));
+				temporaryDirectory.toString(),
+				mock(StoredResidentDocumentRepository.class),
+				mock(StoredResidentDocumentChunkRepository.class));
 		byte[] large = new byte[(int) PrivateDocumentStorageService.MAX_FILE_SIZE + 1];
 		MockMultipartFile upload = new MockMultipartFile("file", "photo.png", "image/png", large);
 
@@ -81,7 +98,8 @@ class PrivateDocumentStorageServiceTests {
 	void loadsExistingLegacyFileFromPrivateDirectory() throws Exception {
 		StoredResidentDocumentRepository repository = mock(StoredResidentDocumentRepository.class);
 		PrivateDocumentStorageService storage =
-				new PrivateDocumentStorageService(temporaryDirectory.toString(), repository);
+				new PrivateDocumentStorageService(
+						temporaryDirectory.toString(), repository, mock(StoredResidentDocumentChunkRepository.class));
 		String key = "123e4567-e89b-12d3-a456-426614174000.jpg";
 		byte[] imageBytes = {(byte) 0xff, (byte) 0xd8, (byte) 0xff};
 		Files.write(temporaryDirectory.resolve(key), imageBytes);
@@ -96,7 +114,9 @@ class PrivateDocumentStorageServiceTests {
 	@Test
 	void reportsLegacyFileMissingFromServerAsGone() {
 		PrivateDocumentStorageService storage = new PrivateDocumentStorageService(
-				temporaryDirectory.toString(), mock(StoredResidentDocumentRepository.class));
+				temporaryDirectory.toString(),
+				mock(StoredResidentDocumentRepository.class),
+				mock(StoredResidentDocumentChunkRepository.class));
 		String key = "123e4567-e89b-12d3-a456-426614174000.jpg";
 
 		ResponseStatusException exception = assertThrows(
