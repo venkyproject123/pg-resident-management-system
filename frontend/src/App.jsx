@@ -1860,6 +1860,109 @@ function App() {
   const monthlyPaymentsOpen = dashboardView === "PAYMENTS";
   const emptyBedsOpen = dashboardView === "BEDS";
   const ownerWorkspaceOpen = dashboardView === "OVERVIEW";
+  const residentForm = formOpen && (
+    <div className={editingId === null ? "resident-form-inline" : "dialog-backdrop"}>
+      <section
+        className={`resident-dialog panel${editingId === null ? " resident-form-inline-card" : ""}`}
+        role="dialog"
+        aria-modal={editingId !== null}
+        aria-labelledby="resident-form-title"
+      >
+        <div className="panel-heading resident-dialog-heading">
+          <div>
+            <p className="eyebrow">{editingId === null ? "NEW TENANT" : `EDITING TENANT #${editingId}`}</p>
+            <h2 id="resident-form-title">{editingId === null ? "Add a tenant" : "Edit tenant details"}</h2>
+            <p className="muted">Enter tenant details and attach their profile photo and identity proof.</p>
+          </div>
+          <button className="icon-button" onClick={closeForm} disabled={loading} aria-label="Close resident form">×</button>
+        </div>
+        {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
+        <form className="resident-form" onSubmit={handleSave}>
+          <div className="resident-fields">
+            <div className="form-row">
+              <label>Full name<input name="name" maxLength="100" required value={form.name} onChange={updateForm} /></label>
+              <label>Father’s name<input name="fatherName" maxLength="100" required value={form.fatherName} onChange={updateForm} /></label>
+            </div>
+            <label>
+              Mobile number
+              <input type="tel" name="mobileNumber" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={form.mobileNumber} onChange={updateForm} />
+            </label>
+            <div className="form-row">
+              <label>Room number<input name="roomNumber" maxLength="30" required value={form.roomNumber} onChange={updateForm} /></label>
+              <SharingSelector
+                value={form.sharing}
+                onChange={(sharing) => setForm((current) => ({ ...current, sharing }))}
+              />
+            </div>
+            <label>Joining date<input type="date" name="joiningDate" required value={form.joiningDate} onChange={updateForm} /></label>
+            <div className="form-row">
+              <label>Monthly rent (₹)<input type="number" name="rent" min="0.01" step="0.01" required value={form.rent} onChange={updateForm} /></label>
+              <label>Advance (₹)<input type="number" name="advanceAmount" min="0" step="0.01" required value={form.advanceAmount} onChange={updateForm} /></label>
+            </div>
+            <label>Permanent address<textarea name="permanentAddress" rows="2" maxLength="1000" required value={form.permanentAddress} onChange={updateForm} /></label>
+            <label>Company address<textarea name="companyAddress" rows="2" maxLength="1000" required value={form.companyAddress} onChange={updateForm} /></label>
+          </div>
+
+          <section className="attachments-section" aria-labelledby="attachments-heading">
+            <div className="attachments-heading">
+              <div>
+                <p className="eyebrow">DOCUMENTS</p>
+                <h3 id="attachments-heading">Photo & identity proof</h3>
+              </div>
+              <span className="private-chip"><span>◆</span> Private</span>
+            </div>
+            <p className="attachments-help">Add files now or when editing this resident. JPEG/PNG photos and JPEG/PNG/PDF proofs, up to 5 MB each.</p>
+            <div className="attachment-grid">
+              <div className="attachment-card">
+                <span className="attachment-icon">▧</span>
+                <span className="attachment-title">Resident photo</span>
+                <span className="attachment-subtitle">{photoFile?.name || (editingResident?.hasPhoto ? "Photo already saved" : "No photo selected")}</span>
+                <label className="file-picker">
+                  <span>{photoFile ? "Choose a different photo" : "Choose photo"}</span>
+                  <input ref={photoInput} type="file" accept="image/jpeg,image/png" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} />
+                </label>
+                {editingResident?.hasPhoto && editingId !== null && (
+                  <button type="button" className="text-action attachment-view" onClick={() => viewDocument(editingResident, "photo")}>View saved photo</button>
+                )}
+              </div>
+              <div className="attachment-card">
+                <span className="attachment-icon proof-icon">▤</span>
+                <span className="attachment-title">Identity proof</span>
+                <span className="attachment-subtitle">{identityProofFile?.name || (editingResident?.hasIdentityProof ? "Proof already saved" : "No proof selected")}</span>
+                <label className="file-picker">
+                  <span>{identityProofFile ? "Choose a different file" : "Choose proof"}</span>
+                  <input ref={identityProofInput} type="file" accept="image/jpeg,image/png,application/pdf" onChange={(event) => setIdentityProofFile(event.target.files?.[0] || null)} />
+                </label>
+                {editingResident?.hasIdentityProof && editingId !== null && (
+                  <button type="button" className="text-action attachment-view" onClick={() => viewDocument(editingResident, "identity-proof")}>View saved proof</button>
+                )}
+              </div>
+            </div>
+            {documentError && <div className="alert alert-error document-message" role="alert">{documentError}</div>}
+            {documentPreview && (
+              <div className="document-preview">
+                <div className="preview-title">{documentPreview.title}</div>
+                {documentPreview.contentType.startsWith("image/") ? (
+                  <img src={documentPreview.url} alt={documentPreview.title} />
+                ) : (
+                  <iframe title={documentPreview.title} src={documentPreview.url} />
+                )}
+              </div>
+            )}
+          </section>
+          <div className="resident-form-footer">
+            <p className="form-privacy"><span>◆</span> Only the signed-in owner can view saved files.</p>
+            <div className="form-footer-actions">
+              <button type="button" className="button button-light" onClick={closeForm} disabled={loading}>Cancel</button>
+              <button type="submit" className="button button-primary" disabled={loading}>
+                {loading ? "Saving resident…" : editingId === null ? "Save resident" : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
   return (
     <main className="dashboard">
       <header className="topbar owner-topbar">
@@ -1907,6 +2010,7 @@ function App() {
             }}>{label}</button>
           ))}
         </nav>
+        {formOpen && editingId === null && residentForm}
         {(ownerWorkspaceOpen || dashboardView === "TENANTS") && <section className="page-heading">
           <div>
             <p className="eyebrow">YOUR PROPERTY</p>
@@ -2412,104 +2516,7 @@ function App() {
           </div>
         )}
 
-        {formOpen && (
-          <div className="dialog-backdrop">
-            <section className="resident-dialog panel" role="dialog" aria-modal="true" aria-labelledby="resident-form-title">
-              <div className="panel-heading resident-dialog-heading">
-                <div>
-                  <p className="eyebrow">{editingId === null ? "NEW TENANT" : `EDITING TENANT #${editingId}`}</p>
-                  <h2 id="resident-form-title">{editingId === null ? "Add a tenant" : "Edit tenant details"}</h2>
-                  <p className="muted">Enter tenant details and attach their profile photo and identity proof.</p>
-                </div>
-                <button className="icon-button" onClick={closeForm} disabled={loading} aria-label="Close resident form">×</button>
-              </div>
-              {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
-              <form className="resident-form" onSubmit={handleSave}>
-                <div className="resident-fields">
-                  <div className="form-row">
-                    <label>Full name<input name="name" maxLength="100" required value={form.name} onChange={updateForm} /></label>
-                    <label>Father’s name<input name="fatherName" maxLength="100" required value={form.fatherName} onChange={updateForm} /></label>
-                  </div>
-                  <label>
-                    Mobile number
-                    <input type="tel" name="mobileNumber" inputMode="numeric" maxLength="10" pattern="[6-9][0-9]{9}" required value={form.mobileNumber} onChange={updateForm} />
-                  </label>
-                  <div className="form-row">
-                    <label>Room number<input name="roomNumber" maxLength="30" required value={form.roomNumber} onChange={updateForm} /></label>
-                    <SharingSelector
-                      value={form.sharing}
-                      onChange={(sharing) => setForm((current) => ({ ...current, sharing }))}
-                    />
-                  </div>
-                  <label>Joining date<input type="date" name="joiningDate" required value={form.joiningDate} onChange={updateForm} /></label>
-                  <div className="form-row">
-                    <label>Monthly rent (₹)<input type="number" name="rent" min="0.01" step="0.01" required value={form.rent} onChange={updateForm} /></label>
-                    <label>Advance (₹)<input type="number" name="advanceAmount" min="0" step="0.01" required value={form.advanceAmount} onChange={updateForm} /></label>
-                  </div>
-                  <label>Permanent address<textarea name="permanentAddress" rows="2" maxLength="1000" required value={form.permanentAddress} onChange={updateForm} /></label>
-                  <label>Company address<textarea name="companyAddress" rows="2" maxLength="1000" required value={form.companyAddress} onChange={updateForm} /></label>
-                </div>
-
-                <section className="attachments-section" aria-labelledby="attachments-heading">
-                  <div className="attachments-heading">
-                    <div>
-                      <p className="eyebrow">DOCUMENTS</p>
-                      <h3 id="attachments-heading">Photo & identity proof</h3>
-                    </div>
-                    <span className="private-chip"><span>◆</span> Private</span>
-                  </div>
-                  <p className="attachments-help">Add files now or when editing this resident. JPEG/PNG photos and JPEG/PNG/PDF proofs, up to 5 MB each.</p>
-                  <div className="attachment-grid">
-                    <div className="attachment-card">
-                      <span className="attachment-icon">▧</span>
-                      <span className="attachment-title">Resident photo</span>
-                      <span className="attachment-subtitle">{photoFile?.name || (editingResident?.hasPhoto ? "Photo already saved" : "No photo selected")}</span>
-                      <label className="file-picker">
-                        <span>{photoFile ? "Choose a different photo" : "Choose photo"}</span>
-                        <input ref={photoInput} type="file" accept="image/jpeg,image/png" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} />
-                      </label>
-                      {editingResident?.hasPhoto && editingId !== null && (
-                        <button type="button" className="text-action attachment-view" onClick={() => viewDocument(editingResident, "photo")}>View saved photo</button>
-                      )}
-                    </div>
-                    <div className="attachment-card">
-                      <span className="attachment-icon proof-icon">▤</span>
-                      <span className="attachment-title">Identity proof</span>
-                      <span className="attachment-subtitle">{identityProofFile?.name || (editingResident?.hasIdentityProof ? "Proof already saved" : "No proof selected")}</span>
-                      <label className="file-picker">
-                        <span>{identityProofFile ? "Choose a different file" : "Choose proof"}</span>
-                        <input ref={identityProofInput} type="file" accept="image/jpeg,image/png,application/pdf" onChange={(event) => setIdentityProofFile(event.target.files?.[0] || null)} />
-                      </label>
-                      {editingResident?.hasIdentityProof && editingId !== null && (
-                        <button type="button" className="text-action attachment-view" onClick={() => viewDocument(editingResident, "identity-proof")}>View saved proof</button>
-                      )}
-                    </div>
-                  </div>
-                  {documentError && <div className="alert alert-error document-message" role="alert">{documentError}</div>}
-                  {documentPreview && (
-                    <div className="document-preview">
-                      <div className="preview-title">{documentPreview.title}</div>
-                      {documentPreview.contentType.startsWith("image/") ? (
-                        <img src={documentPreview.url} alt={documentPreview.title} />
-                      ) : (
-                        <iframe title={documentPreview.title} src={documentPreview.url} />
-                      )}
-                    </div>
-                  )}
-                </section>
-                <div className="resident-form-footer">
-                  <p className="form-privacy"><span>◆</span> Only the signed-in owner can view saved files.</p>
-                  <div className="form-footer-actions">
-                    <button type="button" className="button button-light" onClick={closeForm} disabled={loading}>Cancel</button>
-                    <button type="submit" className="button button-primary" disabled={loading}>
-                      {loading ? "Saving resident…" : editingId === null ? "Save resident" : "Save changes"}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </section>
-          </div>
-        )}
+        {formOpen && editingId !== null && residentForm}
 
         {viewerResident && (
           <div className="dialog-backdrop" onClick={() => { setViewerResident(null); setDocumentPreview(null); setDocumentError(""); }}>

@@ -297,6 +297,9 @@ td { height: 60px; padding: 7px 12px; border-top: 1px solid #f0f2ef; color: #687
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 .dialog-backdrop { position: fixed; z-index: 10; inset: 0; display: grid; overflow-y: auto; place-items: center; padding: 28px; background: #12221bd9; backdrop-filter: blur(5px); }
 .resident-dialog { display: flex; flex-direction: column; width: min(850px, 100%); max-height: calc(100vh - 56px); overflow: hidden; border: 1px solid #e4eae4; border-radius: 18px; box-shadow: 0 28px 100px #0c1b154d; }
+.resident-form-inline { margin: 18px 0 22px; }
+.resident-dialog.resident-form-inline-card { width: 100%; max-height: none; overflow: visible; }
+.resident-dialog.resident-form-inline-card > .resident-form { overflow: visible; }
 .resident-dialog-heading { flex: 0 0 auto; padding: 24px 28px 20px; border-bottom: 1px solid #dcebe0; background: linear-gradient(115deg, #edf7ef 0%, #f5faf7 58%, #eef5fb 100%); }
 .resident-dialog-heading h2 { font-size: 22px; letter-spacing: -.6px; }
 .resident-dialog-heading .muted { margin: 7px 0 0; font-size: 12px; }
