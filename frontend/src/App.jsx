@@ -1993,7 +1993,7 @@ function App() {
             className={`dashboard-nav-add-tenant${formOpen && editingId === null ? " active" : ""}`}
             aria-current={formOpen && editingId === null ? "page" : undefined}
             onClick={startCreate}
-          >Add resident</button>
+          >Add Tenant</button>
           {[
             ["TENANTS", "Tenants"],
             ["BEDS", "Beds"]
@@ -2011,7 +2011,7 @@ function App() {
           ))}
         </nav>
         {formOpen && editingId === null && residentForm}
-        {(ownerWorkspaceOpen || dashboardView === "TENANTS") && <section className="page-heading">
+        {(ownerWorkspaceOpen || (dashboardView === "TENANTS" && !(formOpen && editingId === null))) && <section className="page-heading">
           <div>
             <p className="eyebrow">YOUR PROPERTY</p>
             <h1>{ownerWorkspaceOpen ? "Overview" : "Tenants"}</h1>
@@ -2242,7 +2242,7 @@ function App() {
               )}
             </>}
           </section>
-        ) : dashboardView === "TENANTS" ? (
+        ) : dashboardView === "TENANTS" && !(formOpen && editingId === null) ? (
         <section className="workspace">
           <article className="panel resident-panel">
             <div className="panel-heading">
