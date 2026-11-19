@@ -810,49 +810,6 @@ td { font-size: 13px; }
 .approval-wait-card > strong { color: #284835; font-size: 15px; }
 .approval-wait-card p { margin: 0; color: #637269; font-size: 12px; line-height: 1.55; }
 .approval-wait-card small { color: #829087; font-size: 10px; line-height: 1.5; }
-.dashboard-insights {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin: -4px 0 22px;
-}
-.insight-card {
-  min-width: 0;
-  padding: 20px 22px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: var(--shadow-sm);
-}
-.insight-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.insight-heading .eyebrow { margin-bottom: 5px; color: #72917d; font-size: 9px; }
-.insight-heading h2 { margin: 0; color: #24382c; font-size: 16px; letter-spacing: -.3px; }
-.insight-period { padding: 5px 9px; border-radius: 20px; background: #eff6f1; color: #326b4b; font-size: 10px; font-weight: 700; white-space: nowrap; }
-.occupancy-chart-row { display: flex; align-items: center; gap: clamp(18px, 4vw, 48px); padding: 22px 4px 6px; }
-.occupancy-chart {
-  display: grid;
-  flex: 0 0 136px;
-  width: 136px;
-  height: 136px;
-  place-items: center;
-  border-radius: 50%;
-  background: conic-gradient(#2c8055 var(--occupancy), #eaf0eb var(--occupancy));
-}
-.occupancy-chart > div { display: grid; width: 100px; height: 100px; align-content: center; justify-items: center; gap: 2px; border-radius: 50%; background: #fff; }
-.occupancy-chart strong { color: #234b34; font-size: 24px; letter-spacing: -1px; }
-.occupancy-chart span { color: #829087; font-size: 10px; }
-.chart-legend { display: grid; flex: 1; gap: 12px; min-width: 0; }
-.chart-legend > span, .rent-chart-legend > span { display: flex; align-items: center; gap: 8px; color: #64736a; font-size: 11px; }
-.chart-legend b, .rent-chart-legend b { margin-left: auto; color: #2f4035; font-size: 11px; white-space: nowrap; }
-.chart-legend i, .rent-chart-legend i { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
-.legend-occupied { background: #2c8055; }
-.legend-vacant, .legend-capacity { background: #dce8df; }
-.legend-pending { background: #eab969; }
-.rent-chart-total { margin: 28px 0 15px; color: #243c2d; font-size: 28px; font-weight: 750; letter-spacing: -1px; }
-.rent-chart-total small { display: block; margin-top: 3px; color: #87938a; font-size: 10px; font-weight: 500; letter-spacing: 0; }
-.rent-progress-track { height: 10px; overflow: hidden; border-radius: 8px; background: #edf2ee; }
-.rent-progress-track span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: linear-gradient(90deg, #2d8056, #72b889); transition: width .4s ease; }
-.rent-chart-legend { display: grid; gap: 12px; margin-top: 17px; }
 .profile-dialog { width: min(680px, 100%); }
 .profile-dialog .resident-dialog-heading { position: relative; }
 .profile-dialog .resident-dialog-heading h2 { margin: 0; color: #23392c; }
@@ -1163,26 +1120,122 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
   .resident-drawer { width: 100%; }
 }
 
-@media (max-width: 900px) {
-  .dashboard-insights { grid-template-columns: minmax(0, 1fr); }
-}
 @media (max-width: 540px) {
   .landing-feature-grid article { padding: 0 16px 18px; }
   .landing-feature-grid article > img { width: calc(100% + 32px); height: 145px; margin: 0 -16px 16px; }
-  .dashboard-insights { gap: 11px; margin-bottom: 16px; }
-  .insight-card { padding: 16px; }
-  .occupancy-chart-row { gap: 15px; padding-top: 18px; }
-  .occupancy-chart { flex-basis: 110px; width: 110px; height: 110px; }
-  .occupancy-chart > div { width: 80px; height: 80px; }
-  .occupancy-chart strong { font-size: 20px; }
-  .chart-legend { gap: 9px; }
-  .chart-legend > span, .rent-chart-legend > span { gap: 6px; font-size: 10px; }
-  .chart-legend b, .rent-chart-legend b { font-size: 10px; }
-  .rent-chart-total { margin-top: 22px; font-size: 25px; }
   .profile-form .auth-registration-grid { grid-template-columns: minmax(0, 1fr); }
   .profile-dialog .resident-dialog-heading { padding-right: 58px; }
   .profile-close { top: 14px; right: 14px; }
   .profile-form { gap: 16px; }
   .profile-form .form-footer-actions { flex-direction: column-reverse; }
   .profile-form .form-footer-actions .button { width: 100%; }
+}
+
+.owner-topbar {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  min-height: 82px;
+  height: auto;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 13px max(calc((100vw - 1380px) / 2), 5.5%);
+  border-color: #28302e;
+  background: #171d1c;
+  color: #f5f7f5;
+}
+.owner-topbar .brand { flex: 0 0 auto; color: #fff; }
+.owner-topbar .brand-mark { background: #3a6e68; }
+.property-identity { display: grid; min-width: 160px; gap: 3px; }
+.property-identity strong { overflow: hidden; color: #f7faf8; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.property-identity span { overflow: hidden; color: #aeb8b3; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.owner-topbar .topbar-right { gap: 9px; margin-left: auto; }
+.owner-topbar .topbar-payment-button { background: #287c78; color: #fff; }
+.owner-topbar .topbar-payment-button:hover:not(:disabled) { background: #226e6a; }
+.owner-topbar .topbar-add-tenant { border-color: #414a47; background: transparent; color: #f3f6f4; }
+.owner-topbar .topbar-add-tenant:hover:not(:disabled) { background: #252e2b; }
+.owner-profile-button { display: inline-flex; min-height: 40px; align-items: center; gap: 9px; padding: 0 8px; border: 0; border-radius: 22px; background: transparent; color: #e7ece9; font-size: 12px; font-weight: 600; }
+.owner-profile-button:hover { background: #252e2b; }
+.owner-profile-avatar { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: #287c78; color: #fff; font-size: 12px; font-weight: 800; }
+.owner-topbar > .topbar-right > .button-primary:last-child { background: #313a37; color: #ecf1ee; }
+.owner-topbar > .topbar-right > .button-primary:last-child:hover:not(:disabled) { background: #3c4742; }
+.dashboard-nav { display: flex; gap: 4px; overflow-x: auto; margin: 0 calc((100vw - min(1380px, 89vw)) / -2); padding: 0 max(calc((100vw - 1380px) / 2), 5.5%); border-bottom: 1px solid #e3e9e4; background: #232a28; scrollbar-width: none; }
+.dashboard-nav::-webkit-scrollbar { display: none; }
+.dashboard-nav button { position: relative; flex: 0 0 auto; min-height: 50px; padding: 0 17px; border: 0; background: transparent; color: #bac4be; font-size: 13px; font-weight: 650; }
+.dashboard-nav button:hover { color: #fff; }
+.dashboard-nav button.active { color: #fff; }
+.dashboard-nav button.active::after { position: absolute; right: 12px; bottom: 0; left: 12px; height: 2px; background: #55aaa0; content: ""; }
+.page-content { padding-top: 21px; }
+.stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stat-card-button { cursor: pointer; }
+.stat-card-button:hover:not(:disabled) { border-color: #c5d5ca; }
+.directory-actions { align-items: center; }
+.tenant-status-filter { display: inline-flex; flex: 0 0 auto; gap: 3px; padding: 3px; border: 1px solid #e5eae6; border-radius: 9px; background: #f5f7f5; }
+.tenant-status-filter button { min-height: 31px; padding: 0 11px; border: 0; border-radius: 6px; background: transparent; color: #65736a; font-size: 11px; font-weight: 650; }
+.tenant-status-filter button.active { background: #fff; box-shadow: 0 1px 4px #1a352410; color: #314f3d; }
+.occupancy-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.occupancy-field legend { margin-bottom: 7px; color: #4e5b53; font-size: 11px; font-weight: 700; }
+.occupancy-segmented { display: inline-flex; max-width: 100%; gap: 3px; padding: 4px; border: 1px solid #e6e9e6; border-radius: 11px; background: #f0f2f0; }
+.occupancy-segmented button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: #68746d; font-size: 12px; font-weight: 650; white-space: nowrap; }
+.occupancy-segmented button.selected { background: #fff; box-shadow: 0 1px 5px #172b1b18; color: #263d30; }
+.landing-insights { display: grid; max-width: 1240px; grid-template-columns: .7fr 1.3fr; align-items: center; gap: 38px; margin: 0 auto; padding: 20px 5% 62px; }
+.landing-insights-heading .eyebrow { color: var(--green); }
+.landing-insights-heading h2 { margin: 0; color: #293d31; font-size: 25px; letter-spacing: -.7px; }
+.landing-insights-heading > p:last-child { margin: 10px 0 0; color: #758178; font-size: 13px; line-height: 1.6; }
+.landing-insight-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.landing-chart-card { min-width: 0; padding: 17px; border: 1px solid #e6ece5; border-radius: 13px; background: #fff; box-shadow: 0 5px 20px #214a350a; }
+.landing-chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.landing-chart-heading > div { display: grid; gap: 5px; }
+.landing-chart-heading > div > span { color: #8b978e; font-size: 8px; font-weight: 800; letter-spacing: 1px; }
+.landing-chart-heading strong { color: #34483a; font-size: 12px; }
+.landing-chart-icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: #edf4ee; color: #426451; font-size: 15px; font-weight: 700; }
+.occupancy-mix-bar { display: flex; overflow: hidden; height: 12px; gap: 3px; margin-top: 26px; border-radius: 10px; background: #f0f2ef; }
+.occupancy-mix-bar span { display: block; height: 100%; border-radius: inherit; }
+.occupancy-mix-bar .mix-coliving { width: 42%; background: #517d68; }
+.occupancy-mix-bar .mix-boys { width: 34%; background: #87a895; }
+.occupancy-mix-bar .mix-girls { flex: 1; background: #c5d6c9; }
+.occupancy-mix-legend { display: flex; flex-wrap: wrap; gap: 8px 13px; margin-top: 17px; color: #69766d; font-size: 9px; }
+.occupancy-mix-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.occupancy-mix-legend i { width: 7px; height: 7px; border-radius: 50%; }
+.occupancy-mix-legend .mix-coliving { background: #517d68; }
+.occupancy-mix-legend .mix-boys { background: #87a895; }
+.occupancy-mix-legend .mix-girls { background: #c5d6c9; }
+.rent-bars { display: flex; height: 78px; align-items: end; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 0 2px; border-bottom: 1px solid #e7ece8; background: repeating-linear-gradient(to bottom, transparent 0, transparent 24px, #eef2ef 25px); }
+.rent-bars span { width: 10%; height: var(--bar-height); border-radius: 5px 5px 0 0; background: #6a9480; }
+.rent-bars span:nth-child(2n) { background: #91b09c; }
+.rent-bars-labels { display: flex; justify-content: space-between; padding-top: 7px; color: #89948c; font-size: 8px; }
+.landing-insights-note { grid-column: 2; margin: -27px 0 0; color: #89948c; font-size: 9px; text-align: right; }
+.record-payment-page { width: 100%; padding: 4px 0 32px; }
+.record-payment-content { width: 100%; max-height: none; margin: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.payment-page-back { flex: 0 0 auto; }
+@media (max-width: 900px) {
+  .owner-topbar { padding-right: 4%; padding-left: 4%; }
+  .dashboard-nav { margin-right: -6%; margin-left: -6%; padding-right: 4%; padding-left: 4%; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .landing-insights { grid-template-columns: 1fr; gap: 22px; }
+  .landing-insights-note { grid-column: 1; margin: -9px 0 0; }
+}
+@media (max-width: 600px) {
+  .owner-topbar { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; padding: 11px 12px; }
+  .owner-topbar .brand { font-size: 18px; }
+  .owner-topbar .brand-mark { width: 30px; height: 30px; }
+  .property-identity { grid-column: 2; grid-row: 1; }
+  .property-identity strong { font-size: 13px; }
+  .property-identity span { font-size: 10px; }
+  .owner-topbar .topbar-right { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; gap: 5px; margin: 0; }
+  .owner-topbar .topbar-right .button { min-height: 36px; padding: 0 9px; font-size: 10px; }
+  .owner-topbar .topbar-payment-button, .owner-topbar .topbar-add-tenant { flex: 1 1 auto; }
+  .owner-profile-button { min-height: 36px; gap: 5px; padding: 0 3px; font-size: 10px; }
+  .owner-profile-avatar { width: 30px; height: 30px; }
+  .dashboard-nav { margin-right: -12px; margin-left: -12px; padding: 0 7px; }
+  .dashboard-nav button { min-height: 46px; padding: 0 13px; font-size: 12px; }
+  .directory-actions { align-items: stretch; flex-direction: column; }
+  .tenant-status-filter { align-self: flex-start; }
+  .landing-insights { padding: 14px 5% 42px; }
+  .landing-insights-heading h2 { font-size: 22px; }
+  .landing-insight-grid { grid-template-columns: 1fr; }
+  .occupancy-segmented { display: flex; width: fit-content; max-width: 100%; }
+  .occupancy-segmented button { padding: 0 11px; }
+  .record-payment-content { padding: 16px 12px; }
+  .payment-page-back { min-height: 34px; padding: 0 9px; font-size: 10px; }
 }

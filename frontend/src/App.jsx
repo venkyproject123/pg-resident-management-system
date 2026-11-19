@@ -268,10 +268,9 @@ function App() {
   const [rooms, setRooms] = useState([]);
   const [roomForm, setRoomForm] = useState({ roomNumber: "", sharing: "" });
   const [monthlyPaymentReport, setMonthlyPaymentReport] = useState(null);
-  const [monthlyPaymentsOpen, setMonthlyPaymentsOpen] = useState(false);
+  const [dashboardView, setDashboardView] = useState("OVERVIEW");
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
-  const [emptyBedsOpen, setEmptyBedsOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("ACTIVE");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -340,8 +339,7 @@ function App() {
     if (!credentials) return undefined;
 
     const keepDashboardOpen = () => {
-      setMonthlyPaymentsOpen(false);
-      setEmptyBedsOpen(false);
+      setDashboardView("OVERVIEW");
       setFormOpen(false);
       setForm(emptyForm);
       setEditingId(null);
@@ -527,7 +525,7 @@ function App() {
   }, [credentials, residentPageIndex, searchText, selectedStatus]);
 
   useEffect(() => {
-    if (!credentials || !monthlyPaymentsOpen) return undefined;
+    if (!credentials || dashboardView !== "PAYMENTS") return undefined;
     let active = true;
     const [year, month] = selectedPaymentPeriod.split("-").map(Number);
     setMonthlyPaymentsLoading(true);
@@ -543,7 +541,7 @@ function App() {
         if (active) setMonthlyPaymentsLoading(false);
       });
     return () => { active = false; };
-  }, [credentials, monthlyPaymentsOpen, selectedPaymentPeriod]);
+  }, [credentials, dashboardView, selectedPaymentPeriod]);
 
   useEffect(() => {
     if (authMode !== "REGISTRATION_SUCCESS" || !registrationCredentials) return undefined;
@@ -622,7 +620,7 @@ function App() {
     await Promise.all([
       loadDashboard(owner),
       loadResidents(owner),
-      monthlyPaymentsOpen ? loadMonthlyPayments(owner) : Promise.resolve()
+      dashboardView === "PAYMENTS" ? loadMonthlyPayments(owner) : Promise.resolve()
     ]);
   }
 
@@ -734,6 +732,10 @@ function App() {
 
   async function handleSetupOwner(event) {
     event.preventDefault();
+    if (!setupForm.propertyType) {
+      setError("Choose an occupancy type.");
+      return;
+    }
     if (setupForm.password.length < 12) {
       setError("You need to enter a password with at least 12 characters.");
       return;
@@ -960,7 +962,7 @@ function App() {
     setRooms([]);
     setRoomForm({ roomNumber: "", sharing: "" });
     setMonthlyPaymentReport(null);
-    setMonthlyPaymentsOpen(false);
+    setDashboardView("OVERVIEW");
     setLoginForm({ username: "", password: "" });
     setRecoveryForm({ recoveryId: "", newPassword: "", confirmPassword: "" });
     setProfileForm({
@@ -1041,7 +1043,9 @@ function App() {
   }
 
   function showResidentsByStatus(status) {
-    setMonthlyPaymentsOpen(false);
+    setDashboardView("TENANTS");
+    setRentPaymentResident(null);
+    setPaymentDraft(null);
     setSelectedStatus(status);
     setSearchText("");
     setResidentPageIndex(0);
@@ -1050,14 +1054,18 @@ function App() {
   }
 
   function showMonthlyPayments() {
-    setEmptyBedsOpen(false);
-    setMonthlyPaymentsOpen((open) => !open);
+    setDashboardView("PAYMENTS");
+    setRentPaymentResident(null);
+    setPaymentDraft(null);
     setSearchText("");
     setError("");
     setNotice("");
   }
 
   function startCreate() {
+    setDashboardView("TENANTS");
+    setRentPaymentResident(null);
+    setPaymentDraft(null);
     setEditingId(null);
     setForm(emptyForm);
     setPhotoFile(null);
@@ -1218,10 +1226,13 @@ function App() {
     }
   }
 
-  async function openRentPayments(resident, year = null, month = null) {
+  async function openRentPayments(resident, year = null, month = null, fullPage = false) {
     const joiningYear = Number(resident.joiningDate.slice(0, 4));
     const requestedYear = year ?? Math.max(new Date().getFullYear(), joiningYear);
     setResidentDetails(null);
+    setDashboardView(fullPage ? "RECORD_PAYMENT" : "PAYMENTS");
+    setRentPaymentResident(null);
+    setPaymentDraft(null);
     setLoading(true);
     setError("");
     setNotice("");
@@ -1236,7 +1247,9 @@ function App() {
         const selectedPayment = payments.find((payment) => payment.month === month);
         setPaymentDraft({
           month,
-          amount: selectedPayment?.amount ? String(selectedPayment.amount) : String(resident.rent),
+          amount: selectedPayment?.amount
+            ? String(Math.max(0, Number(resident.rent) - Number(selectedPayment.amount)))
+            : String(resident.rent),
           paidDate: selectedPayment?.paidDate || new Date().toISOString().slice(0, 10),
           method: selectedPayment?.method || "CASH"
         });
@@ -1244,6 +1257,7 @@ function App() {
         setPaymentDraft(null);
       }
     } catch (requestError) {
+      if (fullPage) setDashboardView("PAYMENTS");
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -1464,6 +1478,34 @@ function App() {
               <div className="landing-preview-row"><span className="landing-preview-icon landing-preview-docs">✓</span><div><strong>Resident records</strong><small>Store key details and documents</small></div><b>→</b></div>
             </div>
           </section>
+          <section className="landing-insights" aria-labelledby="landing-insights-title">
+            <div className="landing-insights-heading">
+              <p className="eyebrow">A QUICK LOOK INSIDE</p>
+              <h2 id="landing-insights-title">Know your property at a glance</h2>
+              <p>Simple occupancy and rent views help you spot what needs attention.</p>
+            </div>
+            <div className="landing-insight-grid">
+              <article className="landing-chart-card">
+                <div className="landing-chart-heading"><div><span>OCCUPANCY MIX</span><strong>Residents by property type</strong></div><span className="landing-chart-icon">⌂</span></div>
+                <div className="occupancy-mix-bar" role="img" aria-label="Illustrative chart showing co-living, boys and girls occupancy categories">
+                  <span className="mix-coliving" /><span className="mix-boys" /><span className="mix-girls" />
+                </div>
+                <div className="occupancy-mix-legend">
+                  <span><i className="mix-coliving" />Co-living</span>
+                  <span><i className="mix-boys" />Boys</span>
+                  <span><i className="mix-girls" />Girls</span>
+                </div>
+              </article>
+              <article className="landing-chart-card">
+                <div className="landing-chart-heading"><div><span>RENT COLLECTION</span><strong>Monthly payment tracking</strong></div><span className="landing-chart-icon">₹</span></div>
+                <div className="rent-bars" role="img" aria-label="Illustrative monthly rent collection chart">
+                  {[48, 68, 56, 82, 64, 92, 73].map((height, index) => <span key={index} style={{ "--bar-height": `${height}%` }} />)}
+                </div>
+                <div className="rent-bars-labels"><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span></div>
+              </article>
+            </div>
+            <p className="landing-insights-note">Illustrative dashboard preview · live totals are shown after you sign in.</p>
+          </section>
           <section className="landing-features" aria-labelledby="landing-features-title">
             <p className="eyebrow">MADE FOR EVERYDAY PG WORK</p>
             <h2 id="landing-features-title">The essentials, all together</h2>
@@ -1588,12 +1630,21 @@ function App() {
               <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="98765 43210" maxLength="10" pattern="[6-9][0-9]{9}" required value={setupForm.mobileNumber} onChange={(event) => setSetupForm({ ...setupForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
               <label>Email<input type="email" autoComplete="email" placeholder="you@example.com" maxLength="100" required value={setupForm.email} onChange={(event) => setSetupForm({ ...setupForm, email: event.target.value })} /></label>
               <label>Property name<input autoComplete="organization" maxLength="100" placeholder="Your PG or co-living name" required value={setupForm.pgName} onChange={(event) => setSetupForm({ ...setupForm, pgName: event.target.value })} /></label>
-              <label>Occupancy type<select required value={setupForm.propertyType} onChange={(event) => setSetupForm({ ...setupForm, propertyType: event.target.value })}>
-                <option value="" disabled>Select occupancy type</option>
-                <option value="CO_LIVING">Co-living</option>
-                <option value="BOYS">Boys</option>
-                <option value="GIRLS">Girls</option>
-              </select></label>
+              <fieldset className="occupancy-field">
+                <legend>Occupancy</legend>
+                <div className="occupancy-segmented" role="group" aria-label="Occupancy type">
+                  {[["CO_LIVING", "Co-living"], ["BOYS", "Boys"], ["GIRLS", "Girls"]].map(([value, label]) => (
+                    <button
+                      type="button"
+                      className={setupForm.propertyType === value ? "selected" : ""}
+                      aria-pressed={setupForm.propertyType === value}
+                      key={value}
+                      onClick={() => setSetupForm({ ...setupForm, propertyType: value })}
+                    >{label}</button>
+                  ))}
+                </div>
+                      <input type="hidden" value={setupForm.propertyType} />
+              </fieldset>
               <label>Locality<input autoComplete="address-level3" maxLength="100" placeholder="Area or neighbourhood" required value={setupForm.locality} onChange={(event) => setSetupForm({ ...setupForm, locality: event.target.value })} /></label>
               <label>City<input autoComplete="address-level2" maxLength="100" placeholder="City" required value={setupForm.city} onChange={(event) => setSetupForm({ ...setupForm, city: event.target.value })} /></label>
               <label className="password-field">Password<SecretInput minLength={12} maxLength="128" autoComplete="new-password" aria-describedby="registration-password-help" required value={setupForm.password} onChange={(event) => setSetupForm({ ...setupForm, password: event.target.value })} />
@@ -1630,53 +1681,70 @@ function App() {
     ? Math.max(0, dashboardSummary.totalBeds - monthlyMemberCount)
     : null;
   const currentPaymentPeriod = getCurrentPaymentPeriod();
-  const ownerWorkspaceOpen = !monthlyPaymentsOpen && !emptyBedsOpen;
-  const occupancyPercent = dashboardSummary?.totalBeds
-    ? Math.min(100, Math.max(0, Math.round((dashboardSummary.occupiedBeds / dashboardSummary.totalBeds) * 100)))
-    : 0;
-  const rentTotal = (dashboardSummary?.monthlyRentCollection || 0) + (dashboardSummary?.pendingRentAmount || 0);
-  const rentCollectionPercent = rentTotal > 0
-    ? Math.round((dashboardSummary.monthlyRentCollection / rentTotal) * 100)
-    : 0;
-
+  const monthlyPaymentsOpen = dashboardView === "PAYMENTS";
+  const emptyBedsOpen = dashboardView === "BEDS";
+  const ownerWorkspaceOpen = dashboardView === "OVERVIEW";
+  const ownerInitials = (profileForm.ownerName || profileForm.username || "O")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((namePart) => namePart.charAt(0).toUpperCase())
+    .join("");
   return (
     <main className="dashboard">
-      <header className="topbar">
+      <header className="topbar owner-topbar">
         <div className="brand" aria-label="Haven">
           <span className="brand-mark">H</span>
           <span>haven<span className="brand-period">.</span></span>
         </div>
+        <div className="property-identity">
+          <strong>{profileForm.pgName || "Your property"}</strong>
+          <span>{[profileForm.locality, profileForm.city].filter(Boolean).join(", ") || profileForm.location || "Property location"}{profileForm.propertyType ? ` · ${profileForm.propertyType === "CO_LIVING" ? "Co-living" : profileForm.propertyType === "BOYS" ? "Boys" : "Girls"}` : ""}</span>
+        </div>
         <div className="topbar-right">
-          <span className="owner-label"><span className="online-dot" /> {profileForm.pgName || "Owner dashboard"}</span>
-          <button className="button button-light" type="button" onClick={openOwnerProfile}>My profile</button>
+          <button className="button button-primary topbar-payment-button" type="button" aria-expanded={monthlyPaymentsOpen} onClick={showMonthlyPayments}>＋ Payment</button>
+          <button className="button button-light topbar-add-tenant" type="button" onClick={startCreate}>＋ Add tenant</button>
+          <button className="owner-profile-button" type="button" onClick={openOwnerProfile} aria-label="Open owner profile">
+            <span className="owner-profile-avatar">{ownerInitials}</span>
+            <span>{profileForm.ownerName || "Owner profile"}</span>
+          </button>
           <button className="button button-primary" onClick={logout}>Sign out</button>
         </div>
       </header>
 
       <div className="page-content">
-        {ownerWorkspaceOpen && <section className="page-heading">
+        <nav className="dashboard-nav" aria-label="Property sections">
+          {[
+            ["OVERVIEW", "Overview"],
+            ["TENANTS", "Tenants"],
+            ["BEDS", "Beds"]
+          ].map(([view, label]) => (
+            <button type="button" className={dashboardView === view ? "active" : ""} aria-current={dashboardView === view ? "page" : undefined} key={view} onClick={() => {
+              setDashboardView(view);
+              setRentPaymentResident(null);
+              setPaymentDraft(null);
+              if (view === "TENANTS") {
+                setSelectedStatus("ACTIVE");
+                setSearchText("");
+                setResidentPageIndex(0);
+              }
+            }}>{label}</button>
+          ))}
+        </nav>
+        {(ownerWorkspaceOpen || dashboardView === "TENANTS") && <section className="page-heading">
           <div>
             <p className="eyebrow">YOUR PROPERTY</p>
-            <h1>Resident overview</h1>
-            <p className="muted">A clear view of the people who call your PG home.</p>
-          </div>
-          <div className="page-heading-actions">
-            <button className="button button-primary" onClick={startCreate}>＋ New resident</button>
-            <button className="button button-primary" type="button" aria-expanded={monthlyPaymentsOpen} aria-controls="monthly-payments" onClick={showMonthlyPayments}>
-              {monthlyPaymentsOpen ? "Hide payments" : "Manage payments"}
-            </button>
-            <button className="button button-primary" type="button" aria-expanded={emptyBedsOpen} aria-controls="room-availability" onClick={() => {
-              setMonthlyPaymentsOpen(false);
-              setEmptyBedsOpen((open) => !open);
-            }}>
-              {emptyBedsOpen ? "Hide rooms/beds" : "Manage rooms/beds"}
-            </button>
+            <h1>{ownerWorkspaceOpen ? "Overview" : "Tenants"}</h1>
+            <p className="muted">{ownerWorkspaceOpen ? "A clear view of your residents, rooms and rent." : "Manage resident profiles, rooms and rent details."}</p>
           </div>
         </section>}
 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {notice && <div className="alert alert-success alert-centered" role="status">{notice}</div>}
 
+        {dashboardView === "RECORD_PAYMENT" && loading && !rentPaymentResident && (
+          <div className="dashboard-loading-note" role="status">Loading rent history…</div>
+        )}
         {ownerWorkspaceOpen && dashboardLoading && !dashboardSummary && (
           <div className="dashboard-loading-note" role="status">Loading your latest dashboard totals…</div>
         )}
@@ -1689,14 +1757,14 @@ function App() {
             <span className="stat-icon icon-vacated">↗</span>
             <div><p className="stat-label">Vacated residents</p><strong>{dashboardSummary.vacatedResidents}</strong></div>
           </button>
-          <article className="stat-card stat-card-static">
+          <button type="button" className="stat-card stat-card-button" onClick={() => setDashboardView("BEDS")}>
             <span className="stat-icon icon-total">▦</span>
             <div><p className="stat-label">Total rooms</p><strong>{dashboardSummary.totalRooms}</strong></div>
-          </article>
-          <article className="stat-card stat-card-static">
+          </button>
+          <button type="button" className="stat-card stat-card-button" onClick={() => setDashboardView("BEDS")}>
             <span className="stat-icon icon-total">▤</span>
             <div><p className="stat-label">Total beds</p><strong>{dashboardSummary.totalBeds}</strong></div>
-          </article>
+          </button>
           <article className="stat-card stat-card-static">
             <span className="stat-icon icon-active">●</span>
             <div><p className="stat-label">Occupied beds</p><strong>{dashboardSummary.occupiedBeds}</strong></div>
@@ -1715,44 +1783,11 @@ function App() {
           </article>
         </section>}
 
-        {ownerWorkspaceOpen && dashboardSummary && <section className="dashboard-insights" aria-label="Property insights">
-          <article className="insight-card occupancy-insight">
-            <div className="insight-heading">
-              <div><p className="eyebrow">CAPACITY</p><h2>Bed occupancy</h2></div>
-              <span className="insight-period">Current</span>
-            </div>
-            <div className="occupancy-chart-row">
-              <div className="occupancy-chart" role="img" aria-label={`${occupancyPercent}% of beds occupied`} style={{ "--occupancy": `${occupancyPercent}%` }}>
-                <div><strong>{occupancyPercent}%</strong><span>occupied</span></div>
-              </div>
-              <div className="chart-legend">
-                <span><i className="legend-occupied" />Occupied beds <b>{dashboardSummary.occupiedBeds}</b></span>
-                <span><i className="legend-vacant" />Available beds <b>{dashboardSummary.availableBeds}</b></span>
-                <span><i className="legend-capacity" />Total capacity <b>{dashboardSummary.totalBeds}</b></span>
-              </div>
-            </div>
-          </article>
-          <article className="insight-card rent-insight">
-            <div className="insight-heading">
-              <div><p className="eyebrow">RENT PERFORMANCE</p><h2>{currentMonthName} collection</h2></div>
-              <span className="insight-period">{rentCollectionPercent}%</span>
-            </div>
-            <div className="rent-chart-total">{formatCurrency(rentTotal)}<small> expected this month</small></div>
-            <div className="rent-progress-track" role="img" aria-label={`${rentCollectionPercent}% rent collected`}>
-              <span style={{ width: `${rentCollectionPercent}%` }} />
-            </div>
-            <div className="rent-chart-legend">
-              <span><i className="legend-occupied" />Collected <b>{formatCurrency(dashboardSummary.monthlyRentCollection)}</b></span>
-              <span><i className="legend-pending" />Pending <b>{formatCurrency(dashboardSummary.pendingRentAmount)}</b></span>
-            </div>
-          </article>
-        </section>}
-
         {emptyBedsOpen && <section className="room-availability panel" id="room-availability" aria-labelledby="room-availability-title">
           <div className="room-availability-heading">
             <div>
               <p className="eyebrow">ROOMS</p>
-              <h2 id="room-availability-title">Manage rooms/beds</h2>
+              <h2 id="room-availability-title">Beds & availability</h2>
             </div>
           </div>
           <div className="total-beds-summary">
@@ -1817,7 +1852,7 @@ function App() {
           )}
         </section>}
 
-        {!emptyBedsOpen && <>
+        {dashboardView !== "BEDS" && <>
         {monthlyPaymentsOpen ? (
           <section className="panel monthly-payments-panel" id="monthly-payments" aria-labelledby="monthly-payments-title">
             <div className="panel-heading">
@@ -1909,7 +1944,7 @@ function App() {
                             roomNumber: payment.roomNumber,
                             rent: payment.rent,
                             joiningDate: payment.joiningDate
-                          }, year, month);
+                          }, year, month, true);
                         }}>{payment.collected > 0 ? "Update payment" : "Record payment"}</button></td>
                       </tr>
                     ))}
@@ -1919,7 +1954,7 @@ function App() {
               )}
             </>}
           </section>
-        ) : (
+        ) : dashboardView === "TENANTS" ? (
         <section className="workspace">
           <article className="panel resident-panel">
             <div className="panel-heading">
@@ -1928,6 +1963,17 @@ function App() {
                 <h2>{searchText.trim() ? "Search results" : selectedStatus === "ACTIVE" ? "Active members" : "Vacated members"} <span className="count-pill">{residentPage.totalElements}</span></h2>
               </div>
               <div className="directory-actions">
+                <div className="tenant-status-filter" role="group" aria-label="Filter tenants">
+                  {["ACTIVE", "VACATED"].map((status) => (
+                    <button
+                      type="button"
+                      className={selectedStatus === status ? "active" : ""}
+                      aria-pressed={selectedStatus === status}
+                      key={status}
+                      onClick={() => showResidentsByStatus(status)}
+                    >{status === "ACTIVE" ? "Active" : "Vacated"}</button>
+                  ))}
+                </div>
                 <form className="search-form" onSubmit={handleSearch}>
                   <span aria-hidden="true" className="search-icon">⌕</span>
                   <input
@@ -1954,15 +2000,15 @@ function App() {
             ) : residents.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-illustration">⌂</div>
-                <h3>{searchText.trim() ? "No matching residents" : "Your directory is ready"}</h3>
-                <p>{searchText.trim() ? "Try another name or room number." : "Add your first resident to start building your directory."}</p>
-                {!searchText.trim() && <button className="button button-primary" onClick={startCreate}>＋ Add a resident</button>}
+                <h3>{searchText.trim() ? "No matching tenants" : "Your tenant directory is ready"}</h3>
+                <p>{searchText.trim() ? "Try another name or room number." : "Add your first tenant to start building your directory."}</p>
+                {!searchText.trim() && <button className="button button-primary" onClick={startCreate}>＋ Add tenant</button>}
               </div>
             ) : (
               <div className="table-wrap">
                 <table className="resident-directory-table">
                   <thead>
-                    <tr><th>RESIDENT</th><th>ROOM / SHARING</th><th>RENT / MONTH</th><th>JOINED</th><th>STATUS</th><th>VACATED DATE</th></tr>
+                    <tr><th>TENANT</th><th>ROOM / SHARING</th><th>RENT / MONTH</th><th>JOINED</th><th>STATUS</th><th>VACATED DATE</th><th>ACTION</th></tr>
                   </thead>
                   <tbody>
                     {residents.map((resident) => (
@@ -1982,6 +2028,12 @@ function App() {
                         <td data-label="Joined">{resident.joiningDate}</td>
                         <td data-label="Status"><span className={`status-badge ${resident.status === "ACTIVE" ? "status-active" : "status-vacated"}`}><span />{resident.status === "ACTIVE" ? "Active" : "Vacated"}</span></td>
                         <td data-label="Vacated date">{resident.vacatedDate || "—"}</td>
+                        <td data-label="Action">
+                          {resident.status === "ACTIVE" && <button type="button" className="button button-light record-payment-button" disabled={loading} onClick={() => {
+                            const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+                            openRentPayments(resident, year, month, true);
+                          }}>Record payment</button>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2012,7 +2064,7 @@ function App() {
           </article>
 
         </section>
-        )}
+        ) : null}
         </>}
 
         {residentDetails && (
@@ -2095,6 +2147,10 @@ function App() {
               </div>
               <footer className="resident-drawer-actions">
                 <button type="button" className="resident-action-button action-history" disabled={loading || residentDetailsLoading} onClick={() => openRentPayments(residentDetails)}>Rent history</button>
+                {residentDetails.status === "ACTIVE" && <button type="button" className="resident-action-button action-history" disabled={loading || residentDetailsLoading} onClick={() => {
+                  const [year, month] = selectedPaymentPeriod.split("-").map(Number);
+                  openRentPayments(residentDetails, year, month, true);
+                }}>Record payment</button>}
                 <button type="button" className="resident-action-button action-edit" disabled={loading} onClick={() => { setResidentDetails(null); startEdit(residentDetails); }}>Edit</button>
                 {residentDetails.status === "ACTIVE" && <button type="button" className="resident-action-button action-vacate" disabled={loading} onClick={() => markVacated(residentDetails)}>Vacate</button>}
                 <button type="button" className="resident-action-button action-delete" disabled={loading} onClick={() => permanentlyDeleteResident(residentDetails)}>Delete</button>
@@ -2104,21 +2160,26 @@ function App() {
         )}
 
         {rentPaymentResident && (
-          <div className="dialog-backdrop" onClick={() => setRentPaymentResident(null)}>
-            <section className="resident-dialog panel rent-payment-dialog" role="dialog" aria-modal="true" aria-labelledby="rent-payment-title" onClick={(event) => event.stopPropagation()}>
+          <div className={dashboardView === "RECORD_PAYMENT" ? "record-payment-page" : "dialog-backdrop"} onClick={() => {
+            if (dashboardView !== "RECORD_PAYMENT") setRentPaymentResident(null);
+          }}>
+            <section className={`resident-dialog panel rent-payment-dialog${dashboardView === "RECORD_PAYMENT" ? " record-payment-content" : ""}`} role="dialog" aria-modal={dashboardView !== "RECORD_PAYMENT"} aria-labelledby="rent-payment-title" onClick={(event) => event.stopPropagation()}>
               <div className="panel-heading">
                 <div>
-                  <p className="eyebrow">MONTHLY RENT</p>
+                  <p className="eyebrow">{dashboardView === "RECORD_PAYMENT" ? "RECORD PAYMENT" : "MONTHLY RENT"}</p>
                   <h2 id="rent-payment-title">{rentPaymentResident.name} · Room {rentPaymentResident.roomNumber}</h2>
                   <p className="muted">Record rent paid by month and keep a payment history.</p>
                 </div>
-                <button className="icon-button" onClick={() => setRentPaymentResident(null)} aria-label="Close rent history">×</button>
+                <button className={dashboardView === "RECORD_PAYMENT" ? "button button-light payment-page-back" : "icon-button"} onClick={() => {
+                  setRentPaymentResident(null);
+                  setDashboardView("PAYMENTS");
+                }} aria-label="Close rent history">{dashboardView === "RECORD_PAYMENT" ? "Back to payments" : "×"}</button>
               </div>
               {error && <div className="alert alert-error dialog-alert" role="alert">{error}</div>}
               <div className="rent-year-selector">
-                <button className="button button-light" disabled={loading || rentPaymentYear <= Number(rentPaymentResident.joiningDate.slice(0, 4))} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear - 1)}>Previous year</button>
+                <button className="button button-light" disabled={loading || rentPaymentYear <= Number(rentPaymentResident.joiningDate.slice(0, 4))} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear - 1, null, dashboardView === "RECORD_PAYMENT")}>Previous year</button>
                 <strong>{rentPaymentYear}</strong>
-                <button className="button button-light" disabled={loading || rentPaymentYear >= new Date().getFullYear()} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear + 1)}>Next year</button>
+                <button className="button button-light" disabled={loading || rentPaymentYear >= new Date().getFullYear()} onClick={() => openRentPayments(rentPaymentResident, rentPaymentYear + 1, null, dashboardView === "RECORD_PAYMENT")}>Next year</button>
               </div>
               <p className="rent-history-start">Rent history starts from {new Date(`${rentPaymentResident.joiningDate}T00:00:00`).toLocaleString("en", { month: "long", year: "numeric" })}, the resident’s joining month.</p>
               <div className="rent-month-grid">
@@ -2173,9 +2234,9 @@ function App() {
             <section className="resident-dialog panel" role="dialog" aria-modal="true" aria-labelledby="resident-form-title">
               <div className="panel-heading resident-dialog-heading">
                 <div>
-                  <p className="eyebrow">{editingId === null ? "NEW RECORD" : `EDITING RESIDENT #${editingId}`}</p>
-                  <h2 id="resident-form-title">{editingId === null ? "Add a resident" : "Edit resident details"}</h2>
-                  <p className="muted">Enter resident details and attach their photo and identity proof.</p>
+                  <p className="eyebrow">{editingId === null ? "NEW TENANT" : `EDITING TENANT #${editingId}`}</p>
+                  <h2 id="resident-form-title">{editingId === null ? "Add a tenant" : "Edit tenant details"}</h2>
+                  <p className="muted">Enter tenant details and attach their profile photo and identity proof.</p>
                 </div>
                 <button className="icon-button" onClick={closeForm} disabled={loading} aria-label="Close resident form">×</button>
               </div>
@@ -2311,19 +2372,27 @@ function App() {
               </div>
               <form className="resident-form profile-form" onSubmit={handleProfileUpdate}>
                 <div className="profile-summary">
-                  <span className="profile-avatar">{(profileForm.ownerName || profileForm.pgName || "O").trim().charAt(0).toUpperCase()}</span>
+                  <span className="profile-avatar">{ownerInitials}</span>
                   <div><strong>{profileForm.ownerName || profileForm.pgName}</strong><span>{profileForm.username}</span></div>
                 </div>
                 <div className="auth-registration-grid">
                   <label>Username<input autoComplete="name" maxLength="100" required value={profileEditForm.ownerName} onChange={(event) => setProfileEditForm({ ...profileEditForm, ownerName: event.target.value })} /></label>
                   <label>Mobile number<span className="mobile-input"><b>+91</b><input type="tel" inputMode="numeric" autoComplete="tel-national" maxLength="10" pattern="[6-9][0-9]{9}" required value={profileEditForm.mobileNumber} onChange={(event) => setProfileEditForm({ ...profileEditForm, mobileNumber: event.target.value.replace(/\D/g, "").slice(0, 10) })} /></span></label>
                   <label>Property name<input maxLength="100" required value={profileEditForm.pgName} onChange={(event) => setProfileEditForm({ ...profileEditForm, pgName: event.target.value })} /></label>
-                  <label>Occupancy type<select required value={profileEditForm.propertyType} onChange={(event) => setProfileEditForm({ ...profileEditForm, propertyType: event.target.value })}>
-                    <option value="" disabled>Select occupancy type</option>
-                    <option value="CO_LIVING">Co-living</option>
-                    <option value="BOYS">Boys</option>
-                    <option value="GIRLS">Girls</option>
-                  </select></label>
+                  <fieldset className="occupancy-field">
+                    <legend>Occupancy</legend>
+                    <div className="occupancy-segmented" role="group" aria-label="Occupancy type">
+                      {[["CO_LIVING", "Co-living"], ["BOYS", "Boys"], ["GIRLS", "Girls"]].map(([value, label]) => (
+                        <button
+                          type="button"
+                          className={profileEditForm.propertyType === value ? "selected" : ""}
+                          aria-pressed={profileEditForm.propertyType === value}
+                          key={value}
+                          onClick={() => setProfileEditForm({ ...profileEditForm, propertyType: value })}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <label>Locality<input maxLength="100" required value={profileEditForm.locality} onChange={(event) => setProfileEditForm({ ...profileEditForm, locality: event.target.value })} /></label>
                   <label>City<input maxLength="100" required value={profileEditForm.city} onChange={(event) => setProfileEditForm({ ...profileEditForm, city: event.target.value })} /></label>
                 </div>
