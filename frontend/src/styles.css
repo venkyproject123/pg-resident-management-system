@@ -1172,12 +1172,14 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
 .owner-profile-button { display: inline-flex; min-height: 40px; align-items: center; gap: 9px; padding: 0 8px; border: 0; border-radius: 22px; background: transparent; color: #35483c; font-size: 12px; font-weight: 650; }
 .owner-profile-button:hover { background: #f1f6f2; }
 .owner-profile-avatar { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: #dcefe5; color: #286d49; font-size: 12px; font-weight: 800; object-fit: cover; }
-.dashboard-nav { display: flex; gap: 4px; overflow-x: auto; margin: 0 calc((100vw - min(1380px, 89vw)) / -2); padding: 0 max(calc((100vw - 1380px) / 2), 5.5%); border-bottom: 1px solid #e8ede8; background: #fff; scrollbar-width: none; }
+.dashboard-nav { display: flex; align-items: center; gap: 4px; overflow-x: auto; margin: 0 calc((100vw - min(1380px, 89vw)) / -2); padding: 0 max(calc((100vw - 1380px) / 2), 5.5%); border-bottom: 1px solid #e8ede8; background: #fff; scrollbar-width: none; }
 .dashboard-nav::-webkit-scrollbar { display: none; }
 .dashboard-nav button { position: relative; flex: 0 0 auto; min-height: 50px; padding: 0 17px; border: 0; background: transparent; color: #718077; font-size: 13px; font-weight: 650; }
 .dashboard-nav button:hover { color: #267052; }
 .dashboard-nav button.active { color: #267052; }
 .dashboard-nav button.active::after { position: absolute; right: 12px; bottom: 0; left: 12px; height: 3px; border-radius: 3px 3px 0 0; background: #43a27e; content: ""; }
+.dashboard-nav .dashboard-nav-add-tenant { min-height: 34px; margin: 0 4px; padding: 0 13px; border: 1px solid #d5e8df; border-radius: 8px; background: #eaf6f0; color: #267052; font-size: 11px; }
+.dashboard-nav .dashboard-nav-add-tenant:hover { background: #ddf0e7; color: #1d5e43; }
 .page-content { padding-top: 21px; }
 .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stat-card-button { cursor: pointer; }
@@ -1191,6 +1193,11 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
 .occupancy-segmented { display: inline-flex; max-width: 100%; gap: 3px; padding: 4px; border: 1px solid #e6e9e6; border-radius: 11px; background: #f0f2f0; }
 .occupancy-segmented button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: #68746d; font-size: 12px; font-weight: 650; white-space: nowrap; }
 .occupancy-segmented button.selected { background: #fff; box-shadow: 0 1px 5px #172b1b18; color: #263d30; }
+.sharing-field { grid-column: 1 / -1; }
+.sharing-segmented { display: flex; width: fit-content; max-width: 100%; }
+.sharing-segmented button { min-width: 0; flex: 1; padding: 0 8px; }
+.resident-fields .sharing-field { grid-column: auto; min-width: 0; }
+.room-add-form .sharing-field { flex: 1.7; min-width: 270px; }
 .landing-insights { display: grid; max-width: 1240px; grid-template-columns: .7fr 1.3fr; align-items: center; gap: 38px; margin: 0 auto; padding: 20px 5% 62px; }
 .landing-insights-heading .eyebrow { color: var(--green); }
 .landing-insights-heading h2 { margin: 0; color: #293d31; font-size: 25px; letter-spacing: -.7px; }
@@ -1237,7 +1244,7 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
   .property-identity span { font-size: 10px; }
   .owner-topbar .topbar-right { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; gap: 5px; margin: 0; }
   .owner-topbar .topbar-right .button { min-height: 36px; padding: 0 9px; font-size: 10px; }
-  .owner-topbar .topbar-payment-button, .owner-topbar .topbar-add-tenant { flex: 1 1 auto; }
+  .owner-topbar .topbar-payment-button { flex: 1 1 auto; }
   .owner-profile-button { min-height: 36px; gap: 5px; padding: 0 3px; font-size: 10px; }
   .owner-profile-avatar { width: 30px; height: 30px; }
   .dashboard-nav { margin-right: -12px; margin-left: -12px; padding: 0 7px; }
@@ -1249,6 +1256,9 @@ input:focus, textarea:focus, select:focus { border-color: #5b9b75; box-shadow: 0
   .landing-insight-grid { grid-template-columns: 1fr; }
   .occupancy-segmented { display: flex; width: fit-content; max-width: 100%; }
   .occupancy-segmented button { padding: 0 11px; }
+  .sharing-segmented { width: 100%; }
+  .sharing-segmented button { min-width: 0; flex: 1; padding: 0 7px; font-size: 10px; }
+  .room-add-form .sharing-field { min-width: 0; }
   .record-payment-content { padding: 16px 12px; }
   .payment-page-back { min-height: 34px; padding: 0 9px; font-size: 10px; }
 }

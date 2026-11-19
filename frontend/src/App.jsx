@@ -217,11 +217,55 @@ function getCurrentPaymentPeriod() {
 
 function readSavedSession() {
   try {
-    sessionStorage.removeItem("haven-auth-session");
+    const saved = JSON.parse(sessionStorage.getItem("haven-auth-session") || "null");
+    if (
+      saved?.credentials?.username
+      && saved.credentials.password
+      && ["owner", "admin"].includes(saved.type)
+    ) {
+      return saved;
+    }
   } catch {
-    // Continue without restoring credentials when browser storage is unavailable.
+    return null;
   }
   return null;
+}
+
+function readSavedDashboardView() {
+  try {
+    const view = sessionStorage.getItem("haven-dashboard-view");
+    return ["OVERVIEW", "TENANTS", "BEDS", "PAYMENTS"].includes(view) ? view : "OVERVIEW";
+  } catch {
+    return "OVERVIEW";
+  }
+}
+
+function saveAuthSession(type, credentials) {
+  try {
+    sessionStorage.setItem("haven-auth-session", JSON.stringify({ type, credentials }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function SharingSelector({ value, onChange, label = "Sharing size" }) {
+  return (
+    <fieldset className="occupancy-field sharing-field">
+      <legend>{label}</legend>
+      <div className="occupancy-segmented sharing-segmented" role="group" aria-label={label}>
+        {[1, 2, 3, 4].map((sharing) => (
+          <button
+            type="button"
+            className={String(value) === String(sharing) ? "selected" : ""}
+            aria-pressed={String(value) === String(sharing)}
+            key={sharing}
+            onClick={() => onChange(String(sharing))}
+          >{sharing} Share</button>
+        ))}
+      </div>
+    </fieldset>
+  );
 }
 
 function App() {
@@ -307,7 +351,7 @@ function App() {
   const [rooms, setRooms] = useState([]);
   const [roomForm, setRoomForm] = useState({ roomNumber: "", sharing: "" });
   const [monthlyPaymentReport, setMonthlyPaymentReport] = useState(null);
-  const [dashboardView, setDashboardView] = useState("OVERVIEW");
+  const [dashboardView, setDashboardView] = useState(readSavedDashboardView);
   const [searchText, setSearchText] = useState("");
   const [roomSearchText, setRoomSearchText] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ACTIVE");
@@ -333,6 +377,15 @@ function App() {
   const [paymentDraft, setPaymentDraft] = useState(null);
   const photoInput = useRef(null);
   const identityProofInput = useRef(null);
+
+  useEffect(() => {
+    if (!["OVERVIEW", "TENANTS", "BEDS", "PAYMENTS"].includes(dashboardView)) return;
+    try {
+      sessionStorage.setItem("haven-dashboard-view", dashboardView);
+    } catch {
+      setError("Your browser could not save the current dashboard section for refresh.");
+    }
+  }, [dashboardView]);
 
   async function openResidentDetails(resident) {
     setResidentDetails(resident);
@@ -668,6 +721,7 @@ function App() {
     event.preventDefault();
     setLoading(true);
     setError("");
+    setNotice("");
     const ownerCredentials = {
       ...loginForm,
       username: loginForm.username.trim().toLowerCase()
@@ -685,8 +739,9 @@ function App() {
         city: profile.city || "",
         hasProfilePhoto: Boolean(profile.hasProfilePhoto)
       });
+      const sessionSaved = saveAuthSession("owner", ownerCredentials);
       setCredentials(ownerCredentials);
-      setNotice("");
+      setNotice(sessionSaved ? "" : "Signed in, but this browser cannot preserve your session after refresh.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -871,6 +926,7 @@ function App() {
     event.preventDefault();
     setLoading(true);
     setError("");
+    setNotice("");
     const adminCredentialsInput = {
       username: adminLoginForm.email.trim().toLowerCase(),
       password: adminLoginForm.password
@@ -884,7 +940,9 @@ function App() {
       );
       setPendingOwners(overview.pending);
       setApprovedOwners(overview.approved);
+      const sessionSaved = saveAuthSession("admin", adminCredentialsInput);
       setAdminCredentials(adminCredentialsInput);
+      setNotice(sessionSaved ? "" : "Signed in, but this browser cannot preserve your session after refresh.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1083,6 +1141,10 @@ function App() {
 
   async function addRoom(event) {
     event.preventDefault();
+    if (!roomForm.sharing) {
+      setError("Choose a sharing capacity.");
+      return;
+    }
     setLoading(true);
     setError("");
     setNotice("");
@@ -1189,6 +1251,24 @@ function App() {
 
   async function handleSave(event) {
     event.preventDefault();
+    if (!form.sharing || ![1, 2, 3, 4].includes(Number(form.sharing))) {
+      setError("Choose a sharing option.");
+      return;
+    }
+    for (const [file, description, allowedTypes] of [
+      [photoFile, "Resident photo", ["image/jpeg", "image/png"]],
+      [identityProofFile, "Identity proof", ["image/jpeg", "image/png", "application/pdf"]]
+    ]) {
+      if (!file) continue;
+      if (!allowedTypes.includes(file.type)) {
+        setError(`${description} must be ${allowedTypes.length === 2 ? "a JPEG or PNG image" : "a JPEG, PNG, or PDF file"}.`);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError(`${description} must be 5 MB or smaller.`);
+        return;
+      }
+    }
     setLoading(true);
     setError("");
     setNotice("");
@@ -1786,7 +1866,6 @@ function App() {
         </div>
         <div className="topbar-right">
           <button className="button button-primary topbar-payment-button" type="button" aria-expanded={monthlyPaymentsOpen} onClick={showMonthlyPayments}>＋ Payment</button>
-          <button className="button button-light topbar-add-tenant" type="button" onClick={startCreate}>＋ Add tenant</button>
           <button className="owner-profile-button" type="button" onClick={openOwnerProfile} aria-label="Open owner profile">
             <OwnerAvatar profile={profileForm} credentials={credentials} version={profilePhotoVersion} />
             <span>{profileForm.ownerName || "Owner profile"}</span>
@@ -1796,8 +1875,9 @@ function App() {
 
       <div className="page-content">
         <nav className="dashboard-nav" aria-label="Property sections">
+          <button type="button" className={dashboardView === "OVERVIEW" ? "active" : ""} aria-current={dashboardView === "OVERVIEW" ? "page" : undefined} onClick={() => setDashboardView("OVERVIEW")}>Overview</button>
+          <button type="button" className="dashboard-nav-add-tenant" onClick={startCreate}>＋ Add tenant</button>
           {[
-            ["OVERVIEW", "Overview"],
             ["TENANTS", "Tenants"],
             ["BEDS", "Beds"]
           ].map(([view, label]) => (
@@ -1888,16 +1968,11 @@ function App() {
                   placeholder="e.g. 101"
                 />
               </label>
-              <label>
-                Sharing capacity
-                <select required value={roomForm.sharing} onChange={(event) => setRoomForm({ ...roomForm, sharing: event.target.value })}>
-                  <option value="">Select sharing</option>
-                  <option value="1">1 sharing</option>
-                  <option value="2">2 sharing</option>
-                  <option value="3">3 sharing</option>
-                  <option value="4">4 sharing</option>
-                </select>
-              </label>
+              <SharingSelector
+                label="Sharing capacity"
+                value={roomForm.sharing}
+                onChange={(sharing) => setRoomForm({ ...roomForm, sharing })}
+              />
               <button className="button button-primary" type="submit" disabled={loading}>{loading ? "Adding…" : "Add room"}</button>
             </form>
             <label className="room-search">
@@ -2334,15 +2409,10 @@ function App() {
                   </label>
                   <div className="form-row">
                     <label>Room number<input name="roomNumber" maxLength="30" required value={form.roomNumber} onChange={updateForm} /></label>
-                    <label>Sharing size
-                      <select name="sharing" required value={form.sharing} onChange={updateForm}>
-                        <option value="">Select sharing</option>
-                        <option value="1">1 sharing</option>
-                        <option value="2">2 sharing</option>
-                        <option value="3">3 sharing</option>
-                        <option value="4">4 sharing</option>
-                      </select>
-                    </label>
+                    <SharingSelector
+                      value={form.sharing}
+                      onChange={(sharing) => setForm((current) => ({ ...current, sharing }))}
+                    />
                   </div>
                   <label>Joining date<input type="date" name="joiningDate" required value={form.joiningDate} onChange={updateForm} /></label>
                   <div className="form-row">

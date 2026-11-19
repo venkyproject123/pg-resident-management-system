@@ -31,7 +31,8 @@ public class OwnerTenantSchemaMigration implements ApplicationRunner {
 		if (hasColumn("owner_accounts", "pg_name")) {
 			jdbcTemplate.update("UPDATE owner_accounts SET pg_name = 'PG' WHERE pg_name IS NULL OR pg_name = ''");
 		}
-		migrateResidentDocumentContentColumn();
+		migrateDocumentContentColumn("resident_document_files");
+		migrateDocumentContentColumn("resident_document_chunks");
 	}
 
 	private void migrateLegacyOwnerContactColumns() {
@@ -56,8 +57,8 @@ public class OwnerTenantSchemaMigration implements ApplicationRunner {
 		}
 	}
 
-	private void migrateResidentDocumentContentColumn() {
-		if (!hasColumn("resident_document_files", "content")) {
+	private void migrateDocumentContentColumn(String table) {
+		if (!hasColumn(table, "content")) {
 			return;
 		}
 
@@ -67,10 +68,14 @@ public class OwnerTenantSchemaMigration implements ApplicationRunner {
 				WHERE TABLE_SCHEMA = DATABASE()
 				  AND TABLE_NAME = ?
 				  AND COLUMN_NAME = ?
-				""", String.class, "resident_document_files", "content");
+				""", String.class, table, "content");
 		if (!"mediumblob".equalsIgnoreCase(dataType) && !"longblob".equalsIgnoreCase(dataType)) {
-			jdbcTemplate.execute(
-					"ALTER TABLE resident_document_files MODIFY COLUMN content MEDIUMBLOB NOT NULL");
+			String documentTable = switch (table) {
+				case "resident_document_files" -> "resident_document_files";
+				case "resident_document_chunks" -> "resident_document_chunks";
+				default -> throw new IllegalArgumentException("Unsupported document table");
+			};
+			jdbcTemplate.execute("ALTER TABLE " + documentTable + " MODIFY COLUMN content MEDIUMBLOB NOT NULL");
 		}
 	}
 
