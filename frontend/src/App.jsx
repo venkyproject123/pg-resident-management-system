@@ -1987,7 +1987,10 @@ function App() {
 
       <div className="page-content">
         <nav className="dashboard-nav" aria-label="Property sections">
-          <button type="button" className={dashboardView === "OVERVIEW" ? "active" : ""} aria-current={dashboardView === "OVERVIEW" ? "page" : undefined} onClick={() => setDashboardView("OVERVIEW")}>Overview</button>
+          <button type="button" className={dashboardView === "OVERVIEW" ? "active" : ""} aria-current={dashboardView === "OVERVIEW" ? "page" : undefined} onClick={() => {
+            if (formOpen) closeForm();
+            setDashboardView("OVERVIEW");
+          }}>Overview</button>
           <button
             type="button"
             className={`dashboard-nav-add-tenant${formOpen && editingId === null ? " active" : ""}`}
@@ -1999,6 +2002,7 @@ function App() {
             ["BEDS", "Beds"]
           ].map(([view, label]) => (
             <button type="button" className={dashboardView === view && !(view === "TENANTS" && formOpen && editingId === null) ? "active" : ""} aria-current={dashboardView === view && !(view === "TENANTS" && formOpen && editingId === null) ? "page" : undefined} key={view} onClick={() => {
+              if (formOpen) closeForm();
               setDashboardView(view);
               setRentPaymentResident(null);
               setPaymentDraft(null);
